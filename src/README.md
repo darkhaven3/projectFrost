@@ -1,3 +1,3 @@
-## Project Frost
+# Kurok
 
-Project Frost is a game for PSP and also for PC built on a modified version of the Quake engine, called Kurok - by Dave (mdave.uk@gmail.com).
+Kurok is an open source Quake engine modification for PSP. I have uploaded the source code to my github for convenience. THIS IS NOT MY CODE. The source code is from http://www.bladebattles.com/kurok/index.html and this repository does not intend to infringe upon it.
