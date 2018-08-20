@@ -1,0 +1,19 @@
+{
+"spawnflags" "0"
+"classname" "worldspawn"
+"_sunlight" "96"
+"_sunlight_mangle" "0 -90 0"
+"_sunlight_penumbra" "3"
+"_minlight" "32"
+"_dirt" "1"
+"_bounce" "1"
+"sounds" "4"
+{
+( -0 -0 -16 ) ( -0 -0 -0 ) ( 64 -0 -16 ) __TB_empty 0 0 0 1 1
+( -0 -0 -16 ) ( -0 64 -16 ) ( -0 -0 -0 ) __TB_empty 0 0 0 1 1
+( -0 -0 -16 ) ( 64 -0 -16 ) ( -0 64 -16 ) __TB_empty 0 0 0 1 1
+( 64 64 -0 ) ( -0 64 -0 ) ( 64 64 -16 ) __TB_empty 0 0 0 1 1
+( 64 64 -0 ) ( 64 64 -16 ) ( 64 -0 -0 ) __TB_empty 0 0 0 1 1
+( 64 64 -0 ) ( 64 -0 -0 ) ( -0 64 -0 ) __TB_empty 0 0 0 1 1
+}
+}
