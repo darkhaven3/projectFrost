@@ -14,6 +14,68 @@ void() info_notnull =
 {
 };
 
+//laser code moved from enforcer.qc
+void() Laser_Touch =
+{
+	local vector org;
+	
+	if (other == self.owner)
+		return;		// don't explode on owner
+
+	if (pointcontents(self.origin) == CONTENT_SKY)
+	{
+		remove(self);
+		return;
+	}
+	
+	sound (self, CHAN_WEAPON, "enforcer/enfstop.wav", 1, ATTN_STATIC);
+	org = self.origin - 8*normalize(self.velocity);
+
+	if (other.health)
+	{
+		SpawnBlood (org, self.velocity*0.2, 15);
+		T_Damage (other, self, self.owner, 15);
+	}
+	else
+	{
+		WriteByte (MSG_BROADCAST, SVC_TEMPENTITY);
+		WriteByte (MSG_BROADCAST, TE_GUNSHOT);
+		WriteCoord (MSG_BROADCAST, org_x);
+		WriteCoord (MSG_BROADCAST, org_y);
+		WriteCoord (MSG_BROADCAST, org_z);
+	}
+	
+	remove(self);	
+};
+
+void(vector org, vector vec) LaunchLaser =
+{
+//	local	vector	vec;
+		
+	if (self.classname == "monster_enforcer")
+		sound (self, CHAN_WEAPON, "enforcer/enfire.wav", 1, ATTN_NORM);
+
+	vec = normalize(vec);
+	
+	newmis = spawn();
+	newmis.owner = self;
+	newmis.movetype = MOVETYPE_FLY;
+	newmis.solid = SOLID_BBOX;
+	newmis.effects = EF_DIMLIGHT;
+
+	setmodel (newmis, "progs/laser.mdl");
+	setsize (newmis, '0 0 0', '0 0 0');		
+
+	setorigin (newmis, org);
+
+	newmis.velocity = vec * 600;
+	newmis.angles = vectoangles(newmis.velocity);
+
+	newmis.nextthink = time + 5;
+	newmis.think = SUB_Remove;
+	newmis.touch = Laser_Touch;
+};
+
 //============================================================================
 
 float START_OFF = 1;

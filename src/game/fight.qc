@@ -10,17 +10,17 @@ When it decides it can't attack, it goes into hunt mode.
 
 float(float v) anglemod;
 
-void() knight_atk1;
-void() knight_runatk1;
-void() ogre_smash1;
-void() ogre_swing1;
+//void() knight_atk1;
+//void() knight_runatk1;
+//void() ogre_smash1;
+//void() ogre_swing1;
 
-void() sham_smash1;
-void() sham_swingr1;
-void() sham_swingl1;
+//void() sham_smash1;
+//void() sham_swingr1;
+//void() sham_swingl1;
 
-float()	DemonCheckAttack;
-void(float side)	Demon_Melee;
+//float()	DemonCheckAttack;
+//void(float side)	Demon_Melee;
 
 void(vector dest) ChooseTurn;
 
@@ -30,7 +30,8 @@ void() ai_face;
 float	enemy_vis, enemy_infront, enemy_range;
 float	enemy_yaw;
 
-
+//stubbed for Frost
+/*
 void() knight_attack =
 {
 	local float		len;
@@ -43,6 +44,7 @@ void() knight_attack =
 	else
 		knight_runatk1 ();
 };
+*/
 
 //=============================================================================
 
@@ -78,10 +80,8 @@ float() CheckAttack =
 	{	// melee attack
 		if (self.th_melee)
 		{
-			if (self.classname == "monster_knight")
-				knight_attack ();
-			else
-				self.th_melee ();
+			//this used to contain a hack for knights from Q1
+			self.th_melee ();
 			return TRUE;
 		}
 	}

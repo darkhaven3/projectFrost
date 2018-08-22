@@ -1,8 +1,8 @@
 void() movetarget_f;
 void() t_movetarget;
-void() knight_walk1;
-void() knight_bow6;
-void() knight_bow1;
+//void() knight_walk1;		//these were stubbed for Frost
+//void() knight_bow6;
+//void() knight_bow1;
 void(entity etemp, entity stemp, entity stemp, float dmg) T_Damage;
 /*
 
@@ -115,8 +115,10 @@ local entity	temp;
 	self = other;
 	other = temp;
 
+	/*
 	if (self.classname == "monster_ogre")
 		sound (self, CHAN_VOICE, "ogre/ogdrag.wav", 1, ATTN_IDLE);// play chainsaw drag sound
+	*/
 
 //dprint ("t_movetarget\n");
 	self.goalentity = self.movetarget = find (world, targetname, other.target);
@@ -278,8 +280,9 @@ void() HuntTarget =
 
 void() SightSound =
 {
-local float	rsnd;
+//local float	rsnd;
 
+	/*
 	if (self.classname == "monster_ogre")	
 		sound (self, CHAN_VOICE, "ogre/ogwake.wav", 1, ATTN_NORM);
 	else if (self.classname == "monster_knight")
@@ -316,6 +319,7 @@ local float	rsnd;
 		sound (self, CHAN_VOICE, "soldier/sight1.wav", 1, ATTN_NORM);
 	else if (self.classname == "monster_shalrath")
 		sound (self, CHAN_VOICE, "shalrath/sight.wav", 1, ATTN_NORM);
+	*/
 };
 
 void() FoundTarget =
@@ -578,13 +582,18 @@ float() FacingIdeal =
 
 //=============================================================================
 
-float()	WizardCheckAttack;
-float()	DogCheckAttack;
+//modified for Frost
+
+
+//float()	WizardCheckAttack;
+//float()	DogCheckAttack;
 
 float() CheckAnyAttack =
 {
 	if (!enemy_vis)
 		return FALSE;
+
+	/*
 	if (self.classname == "monster_army")
 		return SoldierCheckAttack ();
 	if (self.classname == "monster_ogre")
@@ -597,6 +606,8 @@ float() CheckAnyAttack =
 		return DogCheckAttack ();
 	if (self.classname == "monster_wizard")
 		return WizardCheckAttack ();
+	*/
+
 	return CheckAttack ();
 };
 

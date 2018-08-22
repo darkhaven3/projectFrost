@@ -175,10 +175,9 @@ void() worldspawn =
 	InitBodyQue ();
 
 // custom map attributes
-	if (self.model == "maps/e1m8.bsp")
-		cvar_set ("sv_gravity", "100");
-	else
-		cvar_set ("sv_gravity", "800");
+// there was a hack here for Q1 e1m8 to set the gravity.
+// field self.model is map filename (e.g. "maps/e1m8.bsp").
+	cvar_set ("sv_gravity", "800");
 
 // the area based ambient sounds MUST be the first precache_sounds
 
