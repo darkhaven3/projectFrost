@@ -1,0 +1,20 @@
+in function monster_oldone (line 256),
+oldone.qc:280: warning F307: type mismatch: void() nopain to void(entity attacker, float damage) self.th_pain
+oldone.qc:246:    const void() nopain  is defined here
+at global scope,
+:: warning Q208: progs CRC not recognised from quake nor clones
+
+defs.qc:401: warning Q302: float empty_float  no references.
+defs.qc:417: warning F207: .string wad  no references.
+defs.qc:428: warning F207: .float light_lev  no references.
+defs.qc:501: warning F207: .vector dest  no references.
+defs.qc:548: warning F207: .float waitmax  no references.
+defs.qc:549: warning F207: .float distance  no references.
+defs.qc:550: warning F207: .float volume  no references.
+ai.qc:37: warning Q302: float current_yaw  no references.
+weapons.qc:674: warning F207: .float hit_z  no references.
+triggers.qc:2: warning Q302: entity stemp  no references.
+note: suppressed 2 more warnings about unreferenced variables, as you clearly don't care about the first 10.
+ai.qc:302: warning F210: Sound "vomitus/v_sight1.wav" was used but not directly precached
+Compile finished: ../progs.dat (id format)
+Done. 23 warnings
