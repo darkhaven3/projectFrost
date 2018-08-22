@@ -1,6 +1,34 @@
-in function monster_oldone (line 256),
-oldone.qc:280: warning F307: type mismatch: void() nopain to void(entity attacker, float damage) self.th_pain
-oldone.qc:246:    const void() nopain  is defined here
+FTEQCC: Jun  3 2018
+Source file: progs.src
+outputfile: ../progs.dat
+compiling defs.qc
+compiling subs.qc
+compiling fight.qc
+compiling ai.qc
+compiling combat.qc
+compiling items.qc
+compiling weapons.qc
+compiling world.qc
+compiling client.qc
+in function PutClientInServer (line 485),
+client.qc:512: warning F307: type mismatch: void() player_pain to void(entity attacker, float damage) self.th_pain
+client.qc:5:    const void() player_pain  is defined here
+compiling player.qc
+compiling monsters.qc
+compiling doors.qc
+in function fd_secret_use (line 567),
+doors.qc:582: warning F307: type mismatch: void() SUB_Null to void(entity attacker, float damage) self.th_pain
+defs.qc:679:    const void() SUB_Null  is defined here
+in function fd_secret_done (line 664),
+doors.qc:669: warning F307: type mismatch: void() fd_secret_use to void(entity attacker, float damage) self.th_pain
+doors.qc:567:    const void() fd_secret_use  is defined here
+in function func_door_secret (line 724),
+doors.qc:773: warning F307: type mismatch: void() fd_secret_use to void(entity attacker, float damage) self.th_pain
+doors.qc:567:    const void() fd_secret_use  is defined here
+compiling buttons.qc
+compiling triggers.qc
+compiling plats.qc
+compiling misc.qc
 at global scope,
 :: warning Q208: progs CRC not recognised from quake nor clones
 
@@ -8,13 +36,12 @@ defs.qc:401: warning Q302: float empty_float  no references.
 defs.qc:417: warning F207: .string wad  no references.
 defs.qc:428: warning F207: .float light_lev  no references.
 defs.qc:501: warning F207: .vector dest  no references.
+defs.qc:548: warning F207: .float waitmin  no references.
 defs.qc:548: warning F207: .float waitmax  no references.
 defs.qc:549: warning F207: .float distance  no references.
 defs.qc:550: warning F207: .float volume  no references.
 ai.qc:37: warning Q302: float current_yaw  no references.
 weapons.qc:674: warning F207: .float hit_z  no references.
-triggers.qc:2: warning Q302: entity stemp  no references.
-note: suppressed 2 more warnings about unreferenced variables, as you clearly don't care about the first 10.
-ai.qc:302: warning F210: Sound "vomitus/v_sight1.wav" was used but not directly precached
+note: suppressed 3 more warnings about unreferenced variables, as you clearly don't care about the first 10.
 Compile finished: ../progs.dat (id format)
-Done. 23 warnings
+Done. 18 warnings
