@@ -26,7 +26,11 @@ extern	qpic_t		*draw_disc;	// also used on sbar
 void Draw_Init (void);
 void Draw_Character (int x, int y, int num);
 void Draw_DebugChar (char num);
+#ifndef PSP_FIXME
+void Draw_SubPic(int x, int y, qpic_t *pic, int srcx, int srcy, int width, int height);
+#endif
 void Draw_Pic (int x, int y, qpic_t *pic);
+void Draw_AlphaPic (int x, int y, qpic_t *pic, float alpha);
 void Draw_TransPic (int x, int y, qpic_t *pic);
 void Draw_TransPicTranslate (int x, int y, qpic_t *pic, byte *translation);
 void Draw_ConsoleBackground (int lines);
@@ -34,9 +38,16 @@ void Draw_BeginDisc (void);
 void Draw_EndDisc (void);
 void Draw_TileClear (int x, int y, int w, int h);
 void Draw_Fill (int x, int y, int w, int h, int c);
+#ifndef PSP_FIXME
+#ifdef GLQUAKE
+void Draw_AlphaFill(int x, int y, int w, int h, int c, float alpha);
+#endif
+#endif
 void Draw_FadeScreen (void);
-void Draw_FadeScreen2 (void);
 void Draw_FadeScreenColor (float r, float g, float b, float a);
+#ifdef SUPPORTS_KUROK
+void Draw_FadeScreen2 (void);
+#endif
 void Draw_String (int x, int y, char *str);
 void Draw_Crosshair(void);
 qpic_t *Draw_PicFromWad (char *name);

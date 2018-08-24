@@ -57,8 +57,8 @@ namespace quake
 		typedef u16				depth_value;
 
 		// Constants.
-		static const std::size_t	screen_width	= 720;
-		static const std::size_t	screen_height	= 480; // todo: PSP supports 720x576 - enough overhead?
+		static const std::size_t	screen_width	= 480;
+		static const std::size_t	screen_height	= 272;
 		static const std::size_t	palette_size	= 256;
 		static pixel* 				display_buffer	= 0;
 		static pixel*				draw_buffer		= 0;

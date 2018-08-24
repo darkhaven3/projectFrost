@@ -23,7 +23,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 // rights reserved.
 
 #include "quakedef.h"
+#ifdef PSP_INPUT_CONTROLS
 #include <pspctrl.h>
+#endif
 /*
 ===============================================================================
 
@@ -49,15 +51,17 @@ state bit 2 is edge triggered on the down to up transition
 kbutton_t	in_mlook, in_klook;
 kbutton_t	in_left, in_right, in_forward, in_back;
 kbutton_t	in_lookup, in_lookdown, in_moveleft, in_moveright;
-kbutton_t	in_strafe, in_speed, in_use, in_jump, in_attack;
+kbutton_t	in_use, in_jump;
+kbutton_t			in_strafe, in_speed, in_attack;
 kbutton_t	in_up, in_down;
 
 int			in_impulse;
 
-
-
-void KeyDown (kbutton_t *b)
-{
+#ifdef PROQUAKE_EXTENSION
+// JPG 1.05 - translate +jump to +moveup under water
+extern cvar_t	pq_moveup;
+#endif
+void KeyDown (kbutton_t *b) {
 	int		k;
 	char	*c;
 
@@ -66,14 +70,39 @@ void KeyDown (kbutton_t *b)
 		k = atoi(c);
 	else
 		k = -1;		// typed manually at the console for continuous down
+#ifdef PROQUAKE_EXTENSION
+	// JPG 1.05 - if jump is pressed underwater, translate it to a moveup
+	if (b == &in_jump && pq_moveup.value && cl.stats[STAT_HEALTH] > 0 && cl.inwater)
+		b = &in_up;
 
+	/* FIXME - remove this if the other code works
+	if (b == &in_jump && pq_moveup.value && cl.stats[STAT_HEALTH] > 0)
+	{
+		int	cont;
+
+		if (cl_entities[0].model)
+		{
+			cont = SV_HullPointContents (&cl_entities[0].model->hulls[0], 0, cl_entities[cl.viewentity].origin);
+			if (cont <= CONTENTS_CURRENT_0 && cont >= CONTENTS_CURRENT_DOWN)
+				cont = CONTENTS_WATER;
+
+			if (cont == CONTENTS_WATER)
+				b = &in_up;
+		}
+	}
+	*/
+#endif
 	if (k == b->down[0] || k == b->down[1])
 		return;		// repeating key
 
 	if (!b->down[0])
+	{
 		b->down[0] = k;
+	}
 	else if (!b->down[1])
+	{
 		b->down[1] = k;
+	}
 	else
 	{
 		Con_Printf ("Three keys down for a button!\n");
@@ -85,21 +114,33 @@ void KeyDown (kbutton_t *b)
 	b->state |= 1 + 2;	// down + impulse down
 }
 
-void KeyUp (kbutton_t *b)
-{
+void KeyUp (kbutton_t *b) {
 	int		k;
 	char	*c;
 
 	c = Cmd_Argv(1);
-	if (c[0])
+	if (c[0]) {
 		k = atoi(c);
-	else
-	{ // typed manually at the console, assume for unsticking, so clear all
+	} else {
+		// typed manually at the console, assume for unsticking, so clear all
 		b->down[0] = b->down[1] = 0;
 		b->state = 4;	// impulse up
 		return;
 	}
-
+#ifdef PROQUAKE_EXTENSION
+	// JPG 1.05 - check to see if we need to translate -jump to -moveup
+	if (b == &in_jump && pq_moveup.value)
+	{
+		if (k == in_up.down[0] || k == in_up.down[1])
+			b = &in_up;
+		else
+		{
+			// in case a -moveup got lost somewhere
+			in_up.down[0] = in_up.down[1] = 0;
+			in_up.state = 4;
+		}
+	}
+#endif
 	if (b->down[0] == k)
 		b->down[0] = 0;
 	else if (b->down[1] == k)
@@ -121,7 +162,7 @@ void IN_MLookDown (void) {KeyDown(&in_mlook);}
 void IN_MLookUp (void) {
 KeyUp(&in_mlook);
 if ( !(in_mlook.state&1) &&  lookspring.value && !lookcenter.value)
-	V_StartPitchDrift();
+	V_StartPitchDrift_f();
 }
 void IN_UpDown(void) {KeyDown(&in_up);}
 void IN_UpUp(void) {KeyUp(&in_up);}
@@ -157,7 +198,32 @@ void IN_UseUp (void) {KeyUp(&in_use);}
 void IN_JumpDown (void) {KeyDown(&in_jump);}
 void IN_JumpUp (void) {KeyUp(&in_jump);}
 
-void IN_Impulse (void) {in_impulse=Q_atoi(Cmd_Argv(1));}
+void IN_Impulse (void) {in_impulse=atoi(Cmd_Argv(1));}
+
+#ifdef PROQUAKE_EXTENSION
+int weaponstat[7] = {STAT_SHELLS, STAT_SHELLS, STAT_NAILS, STAT_NAILS, STAT_ROCKETS, STAT_ROCKETS, STAT_CELLS};
+
+/* JPG 3.30 - bestweapon from QuakePro+
+===============
+IN_BestWeapon
+===============
+*/
+static void IN_BestWeapon (void)
+{
+	int i, impulse;
+
+	for (i = 1 ; i < Cmd_Argc() ; i++)
+	{
+		impulse = atoi(Cmd_Argv(i));
+		if (impulse > 0 && impulse < 9 && (impulse == 1 ||
+			( (cl.items & (IT_SHOTGUN << (impulse - 2))) && cl.stats[weaponstat[impulse - 2]] )))
+		{
+			in_impulse = impulse;
+			break;
+		}
+	}
+}
+#endif
 
 /*
 ===============
@@ -169,8 +235,7 @@ Returns 0.25 if a key was pressed and released during the frame,
 1.0 if held for the entire time
 ===============
 */
-float CL_KeyState (kbutton_t *key)
-{
+float CL_KeyState (kbutton_t *key) {
 	float		val;
 	qboolean	impulsedown, impulseup, down;
 
@@ -180,57 +245,34 @@ float CL_KeyState (kbutton_t *key)
 	val = 0;
 
 	if (impulsedown && !impulseup)
-	{
-		if (down)
-			val = 0.5;	// pressed and held this frame
-		else
-			val = 0;	//	I_Error ();
-	}
+		val = down ? 0.5 : 0;
 	if (impulseup && !impulsedown)
-	{
-		if (down)
-			val = 0;	//	I_Error ();
-		else
-			val = 0;	// released this frame
-	}
+		val = 0;
 	if (!impulsedown && !impulseup)
-	{
-		if (down)
-			val = 1.0;	// held the entire frame
-		else
-			val = 0;	// up the entire frame
-	}
+		val = down ? 1.0 : 0;
 	if (impulsedown && impulseup)
-	{
-		if (down)
-			val = 0.75;	// released and re-pressed this frame
-		else
-			val = 0.25;	// pressed and released this frame
-	}
+		val = down ? 0.75 : 0.25;
 
 	key->state &= 1;		// clear impulses
 
 	return val;
 }
 
-
-
-
 //==========================================================================
 
-cvar_t	cl_upspeed = {"cl_upspeed","200"};
-cvar_t	cl_forwardspeed = {"cl_forwardspeed","200", true};
-cvar_t	cl_backspeed = {"cl_backspeed","200", true};
-cvar_t	cl_sidespeed = {"cl_sidespeed","350"};
+cvar_t	cl_upspeed = {"cl_upspeed","200", true};
+cvar_t	cl_forwardspeed = {"cl_forwardspeed","400", true};  // Baker 3.99k: Defaults to 400 (always run) instead of 200
+cvar_t	cl_backspeed = {"cl_backspeed","400", true}; // Baker 3.99k: Defaults to 400 (always run) instead of 200
+cvar_t	cl_sidespeed = {"cl_sidespeed","350", true};
 
 cvar_t	cl_movespeedkey = {"cl_movespeedkey","2.0"};
+cvar_t	cl_anglespeedkey = {"cl_anglespeedkey","1.5"};
 
 cvar_t	cl_yawspeed = {"cl_yawspeed","140"};
 cvar_t	cl_pitchspeed = {"cl_pitchspeed","150"};
 
-cvar_t	cl_anglespeedkey = {"cl_anglespeedkey","1.5"};
 
-extern cvar_t scr_fov;
+
 
 /*
 ================
@@ -241,16 +283,18 @@ Moves the local angle positions
 */
 void CL_AdjustAngles (void)
 {
-	float	speed;
-	float	up, down;
+	float	speed, up, down;
 
-	if (in_speed.state & 1)
-		speed = host_frametime * cl_anglespeedkey.value;
-	else
-		speed = host_frametime;
+	speed = (in_speed.state & 1) ? host_frametime * cl_anglespeedkey.value : host_frametime;
 
+#ifdef SUPPORTS_XFLIP
+	if (gl_xflip.value) cl.viewangles[YAW] *= -1;   //Atomizer - GL_XFLIP
+#endif
+
+#ifdef SUPPORTS_KUROK
     if (kurok)
     {
+		extern cvar_t scr_fov;
         if(scr_fov.value <= 25)
             speed = speed / 4;
         else if(scr_fov.value <= 50)
@@ -260,6 +304,7 @@ void CL_AdjustAngles (void)
         else
             speed = speed;
     }
+#endif
 
 	if (!(in_strafe.state & 1))
 	{
@@ -267,6 +312,11 @@ void CL_AdjustAngles (void)
 		cl.viewangles[YAW] += speed*cl_yawspeed.value*CL_KeyState (&in_left);
 		cl.viewangles[YAW] = anglemod(cl.viewangles[YAW]);
 	}
+
+#ifdef SUPPORTS_XFLIP
+	if (gl_xflip.value) cl.viewangles[YAW] *= -1;  //Atomizer - GL_XFLIP
+#endif
+
 	if (in_klook.state & 1)
 	{
 		V_StopPitchDrift ();
@@ -282,11 +332,25 @@ void CL_AdjustAngles (void)
 
 	if (up || down)
 		V_StopPitchDrift ();
-
+#ifdef PROQUAKE_EXTENSION
+	// JPG 1.05 - add pq_fullpitch
+	if (pq_fullpitch.value)
+	{
+#endif
 	if (cl.viewangles[PITCH] > 90)
 		cl.viewangles[PITCH] = 90;
 	if (cl.viewangles[PITCH] < -90)
 		cl.viewangles[PITCH] = -90;
+#ifdef PROQUAKE_EXTENSION
+	}
+	else
+	{
+		if (cl.viewangles[PITCH] > 80)
+			cl.viewangles[PITCH] = 80;
+		if (cl.viewangles[PITCH] < -70)
+			cl.viewangles[PITCH] = -70;
+	}
+#endif
 
 	if (cl.viewangles[ROLL] > 50)
 		cl.viewangles[ROLL] = 50;
@@ -295,24 +359,16 @@ void CL_AdjustAngles (void)
 
 }
 
-/*
-================
-CL_BaseMove
-
-Send the intended movement message to the server
-================
-*/
-void CL_BaseMove (usercmd_t *cmd)
-{
+//Send the intended movement message to the server
+void CL_BaseMove (usercmd_t *cmd) {
 	if (cls.signon != SIGNONS)
 		return;
 
 	CL_AdjustAngles ();
 
-	Q_memset (cmd, 0, sizeof(*cmd));
+	memset (cmd, 0, sizeof(*cmd));
 
-	if (in_strafe.state & 1)
-	{
+	if (in_strafe.state & 1) {
 		cmd->sidemove += cl_sidespeed.value * CL_KeyState (&in_right);
 		cmd->sidemove -= cl_sidespeed.value * CL_KeyState (&in_left);
 	}
@@ -320,29 +376,64 @@ void CL_BaseMove (usercmd_t *cmd)
 	cmd->sidemove += cl_sidespeed.value * CL_KeyState (&in_moveright);
 	cmd->sidemove -= cl_sidespeed.value * CL_KeyState (&in_moveleft);
 
+
+#ifdef SUPPORTS_XFLIP
+	if(gl_xflip.value) cmd->sidemove *= -1;   //Atomizer - GL_XFLIP
+#endif
+
+
 	cmd->upmove += cl_upspeed.value * CL_KeyState (&in_up);
 	cmd->upmove -= cl_upspeed.value * CL_KeyState (&in_down);
 
-	if (! (in_klook.state & 1) )
-	{
+	if (! (in_klook.state & 1)) {
 		cmd->forwardmove += cl_forwardspeed.value * CL_KeyState (&in_forward);
 		cmd->forwardmove -= cl_backspeed.value * CL_KeyState (&in_back);
 	}
 
-//
 // adjust for speed key
-//
-	if (in_speed.state & 1)
-	{
+	if (in_speed.state & 1) {
 		cmd->forwardmove *= cl_movespeedkey.value;
 		cmd->sidemove *= cl_movespeedkey.value;
 		cmd->upmove *= cl_movespeedkey.value;
 	}
 
-#ifdef QUAKE2
-	cmd->lightlevel = cl.light_level;
-#endif
+
 }
+
+#ifdef PROQUAKE_EXTENSION
+// JPG - support for synthetic lag
+sizebuf_t lag_buff[32];
+byte lag_data[32][128];
+unsigned int lag_head, lag_tail;
+double lag_sendtime[32];
+
+/* JPG - this function sends delayed move messages
+==============
+CL_SendLagMove
+==============
+*/
+void CL_SendLagMove (void)
+{
+	if (cls.demoplayback || cls.state != ca_connected || cls.signon != SIGNONS)
+		return;
+
+	while ((lag_tail < lag_head) && (lag_sendtime[lag_tail & 31] <= realtime))
+	{
+		lag_tail++;
+		if (++cl.movemessages <= 2)
+		{
+			lag_head = lag_tail = 0;  // JPG - hack: if cl.movemessages has been reset, we should reset these too
+			continue;	// return -> continue
+		}
+
+		if (NET_SendUnreliableMessage (cls.netcon, &lag_buff[(lag_tail-1)&31]) == -1)
+		{
+			Con_Printf ("CL_SendMove: lost server connection\n");
+			CL_Disconnect ();
+		}
+	}
+}
+#endif
 
 /*
 ==============
@@ -351,8 +442,7 @@ CL_SendMove
 */
 void CL_SendMove (usercmd_t *cmd)
 {
-	int		i;
-	int		bits;
+	int		i, bits;
 	sizebuf_t	buf;
 	byte	data[128];
 
@@ -362,43 +452,19 @@ void CL_SendMove (usercmd_t *cmd)
 
 	cl.cmd = *cmd;
 
-//
 // send the movement message
-//
     MSG_WriteByte (&buf, clc_move);
 
 	MSG_WriteFloat (&buf, cl.mtime[0]);	// so server can get ping times
 
-	if (!cls.demoplayback) // JPG - precise aim for ProQuake!
-	{
-		for (i=0 ; i<3 ; i++)
-			MSG_WritePreciseAngle (&buf, cl.viewangles[i]);
-	}
-	else
-	{
 		for (i=0 ; i<3 ; i++)
 			MSG_WriteAngle (&buf, cl.viewangles[i]);
-	}
 
-
-//	for (i=0 ; i<3 ; i++)
-//		MSG_WriteAngle (&buf, cl.viewangles[i]);
-/*
-	// Read the pad state.
-	SceCtrlData pad;
-	sceCtrlPeekBufferPositive(&pad, 1);
-
-    MSG_WriteAngle (&buf, cl.viewangles[PITCH] + ((pad.Ly - 128)));
-    MSG_WriteAngle (&buf, cl.viewangles[YAW] + ((pad.Lx - 128)));
-    MSG_WriteAngle (&buf, cl.viewangles[ROLL]);
-*/
     MSG_WriteShort (&buf, cmd->forwardmove);
     MSG_WriteShort (&buf, cmd->sidemove);
     MSG_WriteShort (&buf, cmd->upmove);
 
-//
 // send button bits
-//
 	bits = 0;
 
 	if ( in_attack.state & 3 )
@@ -414,21 +480,12 @@ void CL_SendMove (usercmd_t *cmd)
     MSG_WriteByte (&buf, in_impulse);
 	in_impulse = 0;
 
-#ifdef QUAKE2
-//
-// light level
-//
-	MSG_WriteByte (&buf, cmd->lightlevel);
-#endif
-
-//
 // deliver the message
-//
 	if (cls.demoplayback)
 		return;
 
 //
-// allways dump the first two message, because it may contain leftover inputs
+// always dump the first two message, because it may contain leftover inputs
 // from the last level
 //
 	if (++cl.movemessages <= 2)
@@ -441,13 +498,8 @@ void CL_SendMove (usercmd_t *cmd)
 	}
 }
 
-/*
-============
-CL_InitInput
-============
-*/
-void CL_InitInput (void)
-{
+
+void CL_InitInput (void) {
 	Cmd_AddCommand ("+moveup",IN_UpDown);
 	Cmd_AddCommand ("-moveup",IN_UpUp);
 	Cmd_AddCommand ("+movedown",IN_DownDown);
@@ -483,6 +535,10 @@ void CL_InitInput (void)
 	Cmd_AddCommand ("-klook", IN_KLookUp);
 	Cmd_AddCommand ("+mlook", IN_MLookDown);
 	Cmd_AddCommand ("-mlook", IN_MLookUp);
+#ifdef PROQUAKE_EXTENSION
+	Cmd_AddCommand ("bestweapon", IN_BestWeapon);	// JPG 3.30 - bestweapon from QuakePro+
 
+	Cvar_RegisterVariable (&pq_lag, NULL); // JPG - synthetic lag
+	Cvar_RegisterVariable (&cl_fullpitch, NULL); // JPG 2.01 - get rid of "unknown command"
+#endif
 }
-

@@ -27,9 +27,6 @@ typedef struct
 	float	forwardmove;
 	float	sidemove;
 	float	upmove;
-#ifdef QUAKE2
-	byte	lightlevel;
-#endif
 } usercmd_t;
 
 typedef struct
@@ -44,8 +41,21 @@ typedef struct
 	float	entertime;
 	int		frags;
 	int		colors;			// two 4 bit fields
+#ifdef PROQUAKE_EXTENSION
+	int		ping;			// JPG - added this
+	int		addr;			// JPG - added this
+#endif
 	byte	translations[VID_GRADES*256];
 } scoreboard_t;
+
+#ifdef PROQUAKE_EXTENSION
+// JPG - added this for teamscore status bar
+typedef struct
+{
+	int colors;
+	int frags;
+} teamscore_t;
+#endif
 
 typedef struct
 {
@@ -59,12 +69,9 @@ typedef struct
 #define	CSHIFT_POWERUP	3
 #define	NUM_CSHIFTS		4
 
-#define	NAME_LENGTH	64
+// #define	NAME_LENGTH	64  Not used!
 
-
-//
 // client_state_t should hold all pieces of the client state
-//
 
 #define	SIGNONS		4			// signon messages to receive before connected
 
@@ -77,12 +84,10 @@ typedef struct
 	float	decay;				// drop this each second
 	float	minlight;			// don't add when contributing less
 	int		key;
+#ifdef SUPPORTS_COLORED_LIGHTS
 	vec3_t	color;				// LordHavoc: .lit support
-#ifdef QUAKE2
-	qboolean	dark;			// subtracts light instead of adding
 #endif
 } dlight_t;
-
 
 #define	MAX_BEAMS	24
 typedef struct
@@ -93,11 +98,23 @@ typedef struct
 	vec3_t	start, end;
 } beam_t;
 
+
+#ifdef SUPPORTS_DEMO_CONTROLS
+// added by joe
+typedef struct framepos_s
+{
+	long		baz;
+	struct framepos_s *next;
+} framepos_t;
+
+extern	framepos_t	*dem_framepos;		// by joe
+#endif
+
 #define	MAX_EFRAGS		640
 
 #define	MAX_MAPSTRING	2048
-#define	MAX_DEMOS		8
-#define	MAX_DEMONAME	16
+#define	MAX_DEMOS	32
+#define	MAX_DEMONAME	64
 
 typedef enum {
 ca_dedicated, 		// a dedicated server with no ability to start a client
@@ -105,10 +122,18 @@ ca_disconnected, 	// full screen console with no connection
 ca_connected		// valid netcon, talking to a server
 } cactive_t;
 
-//
+#ifdef HTTP_DOWNLOAD
+typedef struct
+{
+	qboolean		web;
+	char			*name;
+	double			percent;
+	qboolean		disconnect;			// set when user tries to disconnect, to allow cleaning up webdownload
+} download_t;
+#endif
+
 // the client_static_t structure is persistant through an arbitrary number
 // of server connections
-//
 typedef struct
 {
 	cactive_t	state;
@@ -127,7 +152,11 @@ typedef struct
 	qboolean	demoplayback;
 	qboolean	timedemo;
 	int			forcetrack;			// -1 = use normal cd track
+#ifdef PSP_FILESYSTEM_RECONCILE
 	int			demofile;
+#else
+	FILE		*demofile;
+#endif
 	int			td_lastframe;		// to meter out one message a frame
 	int			td_startframe;		// host_framecount at start
 	float		td_starttime;		// realtime at second frame of timedemo
@@ -137,15 +166,19 @@ typedef struct
 	int			signon;			// 0 to SIGNONS
 	struct qsocket_s	*netcon;
 	sizebuf_t	message;		// writing buffer to send to server
+#ifdef HTTP_DOWNLOAD
+	download_t	download;
+#endif
 
+#ifdef SUPPORTS_AVI_CAPTURE
+	qboolean	capturedemo;
+#endif
 } client_static_t;
 
 extern client_static_t	cls;
 
-//
 // the client_state_t structure is wiped completely at every
 // server signon
-//
 typedef struct
 {
 	int			movemessages;	// since connecting to this server
@@ -200,23 +233,22 @@ typedef struct
 								// a lerp point for other data
 	double		oldtime;		// previous cl.time, time-oldtime is used
 								// to decay light values and smooth step ups
+	double		ctime;			// joe: copy of cl.time, to avoid incidents caused by rewind
 
 
 	float		last_received_message;	// (realtime) for net trouble icon
 
-//
 // information that is static for the entire time connected to a server
-//
 	struct model_s		*model_precache[MAX_MODELS];
 	struct sfx_s		*sound_precache[MAX_SOUNDS];
 
 	char		levelname[40];	// for display on solo scoreboard
-	int			viewentity;		// cl_entitites[cl.viewentity] = player
+	int			viewentity;		// cl_entities[cl.viewentity] = player
 	int			maxclients;
 	int			gametype;
 
 // refresh related state
-	struct model_s	*worldmodel;	// cl_entitites[0].model
+	struct model_s	*worldmodel;	// cl_entities[0].model
 	struct efrag_s	*free_efrags;
 	int			num_entities;	// held in cl_entities array
 	int			num_statics;	// held in cl_staticentities array
@@ -225,24 +257,35 @@ typedef struct
 	int			cdtrack, looptrack;	// cd audio
 
 // frag scoreboard
-	scoreboard_t	*scores;		// [cl.maxclients]
-
-#ifdef QUAKE2
-// light level at player's position including dlights
-// this is sent back to the server each frame
-// architectually ugly but it works
-	int			light_level;
+	scoreboard_t	*scores;			// [cl.maxclients]
+#ifdef PROQUAKE_EXTENSION
+	teamscore_t		*teamscores;		// [13] - JPG for teamscores in status bar
+	qboolean		teamgame;			// JPG = true for match, false for individual
+	int				minutes;			// JPG - for match time in status bar
+	int				seconds;			// JPG - for match time in status bar
+	double			last_match_time;	// JPG - last time match time was obtained
+	double			last_ping_time;		// JPG - last time pings were obtained
+	qboolean		console_ping;		// JPG 1.05 - true if the ping came from the console
+	double			last_status_time;	// JPG 1.05 - last time status was obtained
 #endif
+	qboolean		console_status;		// JPG 1.05 - true if the status came from the console
+#ifdef PROQUAKE_EXTENSION
+	double			match_pause_time;	// JPG - time that match was paused (or 0)
+	vec3_t			lerpangles;			// JPG - angles now used by view.c so that smooth chasecam doesn't fuck up demos
+	vec3_t			death_location;		// JPG 3.20 - used for %d formatting
+#endif
+
 } client_state_t;
 
+extern	client_state_t	cl;
 
-//
 // cvars
-//
 extern	cvar_t	cl_name;
 extern	cvar_t	cl_color;
 
-extern  cvar_t  max_fps;
+#ifdef PSP_FIXME // Baker: find out where this should really go
+extern  cvar_t  pq_maxfps;
+#endif
 
 extern	cvar_t	cl_upspeed;
 extern	cvar_t	cl_forwardspeed;
@@ -256,32 +299,47 @@ extern	cvar_t	cl_pitchspeed;
 
 extern	cvar_t	cl_anglespeedkey;
 
-extern	cvar_t	cl_autofire;
-
 extern	cvar_t	cl_shownet;
 extern	cvar_t	cl_nolerp;
 
 extern	cvar_t	cl_pitchdriftspeed;
 extern	cvar_t	lookspring;
 extern	cvar_t	lookstrafe;
+extern	cvar_t	sensitivity;
+#ifdef PSP_ANALOG_STICK
+extern	cvar_t	cl_autofire;
 extern  cvar_t  lookcenter;
-extern	cvar_t	in_sensitivity;
 extern	cvar_t	in_tolerance;
 extern	cvar_t	in_acceleration;
 
 extern  cvar_t  cl_autoaim;
-
+#endif
 extern	cvar_t	m_pitch;
 extern	cvar_t	m_yaw;
 extern	cvar_t	m_forward;
 extern	cvar_t	m_side;
 
+extern	cvar_t	cl_sbar;
+
+#ifdef SUPPORTS_DEMO_CONTROLS
+extern	cvar_t	cl_demorewind;
+extern	cvar_t	cl_demospeed;
+#endif
+
 //#define	MAX_TEMP_ENTITIES	128			// lightning bolts, etc
 //#define	MAX_STATIC_ENTITIES	128			// torches, etc
+#ifdef PSP_ALTERED_LIMITS
 #define	MAX_TEMP_ENTITIES	256			// lightning bolts, etc
 #define	MAX_STATIC_ENTITIES	256			// torches, etc
-
-extern	client_state_t	cl;
+#else
+#define	MAX_TEMP_ENTITIES	64			// lightning bolts, etc
+#define	MAX_STATIC_ENTITIES	128			// torches, etc
+#endif
+#ifdef PSP_ALTERED_LIMITS
+#define	MAX_VISEDICTS	512
+#else
+#define	MAX_VISEDICTS	256
+#endif
 
 // FIXME, allocate dynamically
 extern	efrag_t			cl_efrags[MAX_EFRAGS];
@@ -292,11 +350,13 @@ extern	dlight_t		cl_dlights[MAX_DLIGHTS];
 extern	entity_t		cl_temp_entities[MAX_TEMP_ENTITIES];
 extern	beam_t			cl_beams[MAX_BEAMS];
 
+extern	entity_t		*cl_visedicts[MAX_VISEDICTS];
+extern	int				cl_numvisedicts;
+
+
 //=============================================================================
 
-//
-// cl_main
-//
+// cl_main.c
 dlight_t *CL_AllocDlight (int key);
 void	CL_DecayLights (void);
 
@@ -312,28 +372,15 @@ void CL_Disconnect (void);
 void CL_Disconnect_f (void);
 void CL_NextDemo (void);
 
-//#define			MAX_VISEDICTS	256
-#define			MAX_VISEDICTS	512
-extern	int				cl_numvisedicts;
-extern	entity_t		*cl_visedicts[MAX_VISEDICTS];
 
-// model indexes
-typedef	enum modelindex_s {
-	mi_player, mi_eyes, mi_rocket, mi_grenade, mi_flame0, mi_flame1, mi_flame2,
-	mi_explo1, mi_explo2, mi_bubble,
-	mi_fish, mi_dog, mi_soldier, mi_enforcer, mi_knight, mi_hknight,
-	mi_scrag, mi_ogre, mi_fiend, mi_vore, mi_shambler,
-	mi_h_dog, mi_h_soldier, mi_h_enforcer, mi_h_knight, mi_h_hknight, mi_h_scrag,
-	mi_h_ogre, mi_h_fiend, mi_h_vore, mi_h_shambler, mi_h_zombie, mi_h_player,
-	mi_gib1, mi_gib2, mi_gib3, NUM_MODELINDEX
-} modelindex_t;
 
-extern	modelindex_t	cl_modelindex[NUM_MODELINDEX];
+#ifdef SUPPORTS_AUTOID
+
+extern	modelindex_t cl_modelindex[NUM_MODELINDEX];
 extern	char		*cl_modelnames[NUM_MODELINDEX];
+#endif
 
-//
-// cl_input
-//
+// cl_input.c
 typedef struct
 {
 	int		down[2];		// key nums holding it down
@@ -343,57 +390,60 @@ typedef struct
 extern	kbutton_t	in_mlook, in_klook;
 extern 	kbutton_t 	in_strafe;
 extern 	kbutton_t 	in_speed;
+extern	kbutton_t	in_attack; // JPG - added this for completeness
+
 
 void CL_InitInput (void);
 void CL_SendCmd (void);
 void CL_SendMove (usercmd_t *cmd);
-
-void CL_ParseTEnt (void);
-void CL_UpdateTEnts (void);
-
+#ifdef PROQUAKE_EXTENSION
+void CL_SendLagMove (void); // JPG - synthetic lag
+#endif
 void CL_ClearState (void);
-
 
 int  CL_ReadFromServer (void);
 void CL_WriteToServer (usercmd_t *cmd);
 void CL_BaseMove (usercmd_t *cmd);
 
-
 float CL_KeyState (kbutton_t *key);
 char *Key_KeynumToString (int keynum);
 
-//
 // cl_demo.c
-//
 void CL_StopPlayback (void);
 int CL_GetMessage (void);
-
 void CL_Stop_f (void);
 void CL_Record_f (void);
 void CL_PlayDemo_f (void);
 void CL_TimeDemo_f (void);
 
-//
 // cl_parse.c
-//
 void CL_ParseServerMessage (void);
 void CL_NewTranslation (int slot);
+void CL_SignonReply (void);
 
-//
-// view
-//
-void V_StartPitchDrift (void);
+// cl_view.c
+void V_StartPitchDrift_f (void);
 void V_StopPitchDrift (void);
 
 void V_RenderView (void);
-void V_UpdatePalette (void);
+
+#ifdef PSP_PSPGU_RECONCILE
+void V_UpdatePaletteNew (void);
+#else
+
+#if defined(SUPPORTS_ENHANCED_GAMMA)
+void V_UpdatePaletteNew (void);
+#endif // ^^ Only applies to vid_wgl at moment.  Linux and MACOSX should be able to support in future
+
+void V_UpdatePaletteOld (void);
+#endif
+
 void V_Register (void);
 void V_ParseDamage (void);
 void V_SetContentsColor (int contents);
 
-
-//
-// cl_tent
-//
+// cl_tent.c
 void CL_InitTEnts (void);
-void CL_SignonReply (void);
+void CL_ParseTEnt (void);
+void CL_UpdateTEnts (void);
+

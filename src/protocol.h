@@ -19,7 +19,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 // protocol.h -- communications protocols
 
-#define	PROTOCOL_VERSION	15
+#define	PROTOCOL_NETQUAKE	15 //johnfitz -- standard quake protocol
 
 // if the high bit of the servercmd is set, the low bits are fast update flags:
 #define	U_MOREBITS	(1<<0)
@@ -27,7 +27,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define	U_ORIGIN2	(1<<2)
 #define	U_ORIGIN3	(1<<3)
 #define	U_ANGLE2	(1<<4)
-#define	U_NOLERP	(1<<5)		// don't interpolate movement
+#define	U_STEP		(1<<5)		//johnfitz -- was U_NOLERP, renamed since it's only used for MOVETYPE_STEP
 #define	U_FRAME		(1<<6)
 #define U_SIGNAL	(1<<7)		// just differentiates from other updates
 
@@ -40,6 +40,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define	U_EFFECTS	(1<<13)
 #define	U_LONGENTITY	(1<<14)
 
+#ifdef SUPPORTS_KUROK_PROTOCOL
 // Tomaz - QC Alpha Scale Glow Control Begin
 
 #define	U_EXTEND1	(1<<15)
@@ -49,9 +50,13 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define	U_GLOW_RED	(1<<19)
 #define	U_GLOW_GREEN	(1<<20)
 #define	U_GLOW_BLUE	(1<<21)
-
 // Tomaz - QC Alpha Scale Glow Control End
-
+#else
+#ifdef SUPPORTS_ALPHA_ENTITIES
+//nehahra support
+#define	U_TRANS		(1<<15)
+#endif
+#endif
 #define	SU_VIEWHEIGHT	(1<<0)
 #define	SU_IDEALPITCH	(1<<1)
 #define	SU_PUNCH1		(1<<2)
@@ -60,7 +65,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define	SU_VELOCITY1	(1<<5)
 #define	SU_VELOCITY2	(1<<6)
 #define	SU_VELOCITY3	(1<<7)
-//define	SU_AIMENT		(1<<8)  AVAILABLE BIT
+#define	SU_UNUSED8		(1<<8)  // AVAILABLE BIT
 #define	SU_ITEMS		(1<<9)
 #define	SU_ONGROUND		(1<<10)		// no data follows, the bit is it
 #define	SU_INWATER		(1<<11)		// no data follows, the bit is it
@@ -76,7 +81,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 // defaults for clientinfo messages
 #define	DEFAULT_VIEWHEIGHT	22
-
 
 // game types sent by serverinfo
 // these determine which intermission screen plays
@@ -118,7 +122,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define	svc_damage			19
 
 #define	svc_spawnstatic		20
-//	svc_spawnbinary		21
+//#define	svc_spawnbinary		21
 #define	svc_spawnbaseline	22
 
 #define	svc_temp_entity		23
@@ -141,13 +145,21 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #define svc_cutscene		34
 
+#ifdef PSP_FIXME
 //johnfitz -- new server messages
 #define	svc_skybox			37		// [string] name
 #define svc_fog				41		// [byte] start [byte] end [byte] red [byte] green [byte] blue [float] time
+#else
+// Nehahra
+#define	svc_showlmp		35	// [string] slotname [string] lmpfilename [coord] x [coord] y
+#define	svc_hidelmp		36	// [string] slotname
+#define	svc_skybox		37	// [string] skyname
 
-//
+#define svc_fog			51	// [byte] enable <optional past this point, only included if enable is true> [float] density [byte] red [byte] green [byte] blue
+
+#endif
+
 // client to server
-//
 #define	clc_bad			0
 #define	clc_nop 		1
 #define	clc_disconnect	2
@@ -155,9 +167,17 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define	clc_stringcmd	4		// [string] message
 
 
-//
+// JPG - added ProQuake commands
+#define pqc_nop			1
+#define pqc_new_team	2
+#define pqc_erase_team	3
+#define pqc_team_frags	4
+#define	pqc_match_time	5
+#define pqc_match_reset	6
+#define pqc_ping_times	7
+// JPG - end mod
+
 // temp entity events
-//
 #define	TE_SPIKE			0
 #define	TE_SUPERSPIKE		1
 #define	TE_GUNSHOT			2

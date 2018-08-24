@@ -17,17 +17,21 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 */
+// menu.c
+
 #include "quakedef.h"
 
-#ifdef WIN32
+#ifdef _WIN32
 #include "winquake.h"
 #endif
 
-#ifdef PSP
+#ifdef PSP_NETWORKING_CODE
 #include <pspkernel.h>
 #include <psputility.h>
 #include "net_dgrm.h"
 
+extern cvar_t	crosshair;
+extern cvar_t   cl_autoaim;
 extern cvar_t	accesspoint;
 extern cvar_t	r_wateralpha;
 extern cvar_t	r_vsync;
@@ -43,7 +47,7 @@ extern cvar_t	in_y_axis_adjust;
 extern cvar_t	r_dithering;
 extern cvar_t   r_i_model_animation;
 extern cvar_t   t_i_model_transform;
-extern cvar_t	show_fps;
+extern cvar_t	pq_drawfps;
 extern cvar_t   sv_aim;
 extern cvar_t   noexit;
 
@@ -99,8 +103,8 @@ enum {
     m_doptions,
     m_search,
     m_slist,
-    m_osk}
-m_state;
+    m_osk
+} menu_state;
 
 void M_Menu_Main_f (void);
 	void M_Menu_SinglePlayer_f (void);
@@ -331,6 +335,20 @@ void M_DrawCheckbox (int x, int y, int on)
 		M_Print (x, y, "off");
 }
 
+void M_DrawCheckboxReverse (int x, int y, int on)
+{
+#if 0
+	if (on)
+		M_DrawCharacter (x, y, 131);
+	else
+		M_DrawCharacter (x, y, 129);
+#endif
+	if (on)
+		M_Print (x, y, "off");
+	else
+		M_Print (x, y, "on");
+}
+
 //=============================================================================
 
 int m_save_demonum;
@@ -346,13 +364,13 @@ void M_ToggleMenu_f (void)
 
 	if (key_dest == key_menu)
 	{
-		if (m_state != m_main)
+		if (menu_state != m_main)
 		{
 			M_Menu_Main_f ();
 			return;
 		}
 		key_dest = key_game;
-		m_state = m_none;
+		menu_state = m_none;
 		return;
 	}
 	if (key_dest == key_console)
@@ -380,7 +398,7 @@ void M_Menu_Main_f (void)
 		cls.demonum = -1;
 	}
 	key_dest = key_menu;
-	m_state = m_main;
+	menu_state = m_main;
 	m_entersound = true;
 }
 
@@ -434,14 +452,14 @@ void M_Main_Draw (void)
     	M_DrawPic ( (320-p->width)/2, 4, p);
     	M_DrawTransPic (72, 32, Draw_CachePic ("gfx/mainmenu.lmp") );
 
-    	f = (int)(host_time * 10)%6;
+    	f = (int)(realtime * 10)%6;
     	M_DrawTransPic (54, 32 + m_main_cursor * 20,Draw_CachePic( va("gfx/menudot%i.lmp", f+1 ) ) );
     }
 
         b = Draw_CachePic ("gfx/m_bttns.lmp");
 	    M_DrawPic ( (320-b->width)/2, 248, b );
 
-		M_Print (112, 0, va("Version %4.2f", (float) KUR_VERSION));
+		M_Print (112, 0, va("Version %4.2f", (float) PROQUAKE_SERIES_VERSION));
 }
 
 
@@ -451,7 +469,7 @@ void M_Main_Key (int key)
 	{
 	case K_ESCAPE:
 		key_dest = key_game;
-		m_state = m_none;
+		menu_state = m_none;
 		cls.demonum = m_save_demonum;
 		if (cls.demonum != -1 && !cls.demoplayback && cls.state != ca_connected)
 			CL_NextDemo ();
@@ -510,7 +528,7 @@ int	m_singleplayer_cursor;
 void M_Menu_SinglePlayer_f (void)
 {
 	key_dest = key_menu;
-	m_state = m_singleplayer;
+	menu_state = m_singleplayer;
 	m_entersound = true;
 }
 
@@ -553,7 +571,7 @@ void M_SinglePlayer_Draw (void)
 	    M_DrawPic ( (320-p->width)/2, 4, p);
 	    M_DrawTransPic (72, 32, Draw_CachePic ("gfx/sp_menu.lmp") );
 
-	    f = (int)(host_time * 10)%6;
+	    f = (int)(realtime * 10)%6;
 
 	    M_DrawTransPic (54, 32 + m_singleplayer_cursor * 20,Draw_CachePic( va("gfx/menudot%i.lmp", f+1 ) ) );
 	}
@@ -653,7 +671,7 @@ void M_ScanSaves (void)
 	{
 		strcpy (m_filenames[i], "--- EMPTY SLOT ---");
 		loadable[i] = false;
-		sprintf (name, "%s/s%i.sav", com_gamedir, i);
+		snprintf(name, sizeof(name),  "%s/s%i.sav", com_gamedir, i);
 		f = fopen (name, "r");
 		if (!f)
 			continue;
@@ -673,7 +691,7 @@ void M_ScanSaves (void)
 void M_Menu_Load_f (void)
 {
 	m_entersound = true;
-	m_state = m_load;
+	menu_state = m_load;
 	key_dest = key_menu;
 	M_ScanSaves ();
 }
@@ -688,7 +706,7 @@ void M_Menu_Save_f (void)
 	if (svs.maxclients != 1)
 		return;
 	m_entersound = true;
-	m_state = m_save;
+	menu_state = m_save;
 	key_dest = key_menu;
 	M_ScanSaves ();
 }
@@ -750,9 +768,9 @@ void M_Save_Draw (void)
 }
 
 
-void M_Load_Key (int k)
+void M_Load_Key (int key)
 {
-	switch (k)
+	switch (key)
 	{
 	case K_ESCAPE:
 		M_Menu_SinglePlayer_f ();
@@ -762,7 +780,7 @@ void M_Load_Key (int k)
 		S_LocalSound ("misc/menu2.wav");
 		if (!loadable[load_cursor])
 			return;
-		m_state = m_none;
+		menu_state = m_none;
 		key_dest = key_game;
 
 	// Host_Loadgame_f can't bring up the loading plaque because too much
@@ -816,16 +834,16 @@ void M_Load_Key (int k)
 }
 
 
-void M_Save_Key (int k)
+void M_Save_Key (int key)
 {
-	switch (k)
+	switch (key)
 	{
 	case K_ESCAPE:
 		M_Menu_SinglePlayer_f ();
 		break;
 
 	case K_ENTER:
-		m_state = m_none;
+		menu_state = m_none;
 		key_dest = key_game;
 		Cbuf_AddText (va("save s%i\n", load_cursor));
 		return;
@@ -852,30 +870,26 @@ void M_Save_Key (int k)
 /* MULTIPLAYER MENU */
 
 int	m_multiplayer_cursor;
+int MULTIPLAYER_ITEMS;
 
-#ifdef PSP
-#define	MULTIPLAYER_ITEMS	9
-#else
-#define	MULTIPLAYER_ITEMS	3
-#endif
 
 void M_Menu_MultiPlayer_f (void)
 {
 	key_dest = key_menu;
-	m_state = m_multiplayer;
+	menu_state = m_multiplayer;
 	m_entersound = true;
 }
 
 
 void M_MultiPlayer_Draw (void)
-{
+{	
 	int		f;
 
 	qpic_t	*p,*b, *j, *c, *t, *i, *a;
 
     b = Draw_CachePic ("gfx/m_bttns.lmp");
 	M_DrawPic ( (320-b->width)/2, 248, b );
-
+	
 	if (kurok)
 	{
 //        M_DrawTransPic (72, 32, Draw_CachePic ("gfx/menu/multi_0.lmp") );
@@ -913,30 +927,31 @@ void M_MultiPlayer_Draw (void)
     	M_DrawPic ((320-a->width)/2, 152, a);
 
 	    M_DrawCheckbox ((320/2) - ((3*8)/2), 168, tcpipAvailable && tcpipAdhoc);
+		
+		if (strstr(com_gamedir, "FROGBOT")) {
+			if (m_multiplayer_cursor == 5)
+				M_PrintWhite ((320/2) - ((8*8)/2), 184,  "Add Bot");
+			else
+				M_Print ((320/2) - ((8*8)/2), 184,  "Add Bot");
 
-    	if (m_multiplayer_cursor == 5)
-	        M_PrintWhite ((320/2) - ((8*8)/2), 184,  "Add Bot");
-        else
-	        M_Print ((320/2) - ((8*8)/2), 184,  "Add Bot");
+			if (m_multiplayer_cursor == 6)
+				M_PrintWhite ((320/2) - ((12*8)/2), 192,  "Add Team Bot");
+			else
+				M_Print ((320/2) - ((12*8)/2), 192,  "Add Team Bot");
 
-    	if (m_multiplayer_cursor == 6)
-	        M_PrintWhite ((320/2) - ((12*8)/2), 192,  "Add Team Bot");
-        else
-	        M_Print ((320/2) - ((12*8)/2), 192,  "Add Team Bot");
+			if (m_multiplayer_cursor == 7)
+				M_PrintWhite ((320/2) - ((10*8)/2), 200,  "Remove Bot");
+			else
+				M_Print ((320/2) - ((10*8)/2), 200,  "Remove Bot");
 
-	    if (m_multiplayer_cursor == 7)
-	        M_PrintWhite ((320/2) - ((10*8)/2), 200,  "Remove Bot");
-        else
-	        M_Print ((320/2) - ((10*8)/2), 200,  "Remove Bot");
-
-	    if (m_multiplayer_cursor == 8)
-	        M_PrintWhite ((320/2) - ((26*8)/2), 216,  "Co-op Player Camera Change");
-        else
-	        M_Print ((320/2) - ((26*8)/2), 216,  "Co-op Player Camera Change");
-
-	    if (serialAvailable || ipxAvailable || tcpipAvailable)
+			if (m_multiplayer_cursor == 8)
+				M_PrintWhite ((320/2) - ((26*8)/2), 216,  "Co-op Player Camera Change");
+			else
+				M_Print ((320/2) - ((26*8)/2), 216,  "Co-op Player Camera Change");
+		}
+		if (serialAvailable || ipxAvailable || tcpipAvailable)
 	    	return;
-	    M_PrintWhite ((320/2) - ((27*8)/2), 232, "No Communications Available");
+		M_PrintWhite ((320/2) - ((27*8)/2), 232, "No Communications Available");
     }
 	else
 	{
@@ -947,119 +962,211 @@ void M_MultiPlayer_Draw (void)
 
 	    M_DrawTransPic (72, 32, Draw_CachePic ("gfx/mp_menu.lmp") );
 
-	    f = (int)(host_time * 10)%6;
+	f = (int)(realtime * 10)%6;  //johnfitz -- was host_time
 
 	    M_DrawTransPic (54, 32 + m_multiplayer_cursor * 20,Draw_CachePic( va("gfx/menudot%i.lmp", f+1 ) ) );
 
-	    #ifdef PSP
+	    #ifdef PSP_NETWORKING_CODE
 	    M_Print (72, 97, "Infrastructure ");
 	    M_DrawCheckbox (220, 97, tcpipAvailable && !tcpipAdhoc);
 
 	    M_Print (72, 117,  "Adhoc          ");
 	    M_DrawCheckbox (220, 117, tcpipAvailable && tcpipAdhoc);
         #endif
-
-	    M_Print (72, 137,  "Add Bot        ");
-	    M_Print (72, 157,  "Add Team Bot   ");
-	    M_Print (72, 177,  "Remove Bot     ");
-	    M_Print (72, 197,  "Co-op Player Camera Change");
-
-	    if (serialAvailable || ipxAvailable || tcpipAvailable)
+		if (strstr(com_gamedir, "FROGBOT")) {
+			M_Print (72, 137,  "Add Bot        ");
+			M_Print (72, 157,  "Add Team Bot   ");
+			M_Print (72, 177,  "Remove Bot     ");
+			M_Print (72, 197,  "Co-op Player Camera Change");
+		}
+		if (serialAvailable || ipxAvailable || tcpipAvailable)
 	    	return;
 	    M_PrintWhite ((320/2) - ((27*8)/2), 207, "No Communications Available");
 
     }
 }
-
-
 void M_MultiPlayer_Key (int key)
 {
-	switch (key)
-	{
-	case K_ESCAPE:
-		M_Menu_Main_f ();
-		break;
-
-	case K_DOWNARROW:
-		S_LocalSound ("misc/menu1.wav");
-		if (++m_multiplayer_cursor >= MULTIPLAYER_ITEMS)
-			m_multiplayer_cursor = 0;
-		break;
-
-	case K_UPARROW:
-		S_LocalSound ("misc/menu1.wav");
-		if (--m_multiplayer_cursor < 0)
-			m_multiplayer_cursor = MULTIPLAYER_ITEMS - 1;
-		break;
-
-	case K_ENTER:
-		m_entersound = true;
-		switch (m_multiplayer_cursor)
+	if (strstr(com_gamedir, "FROGBOT")) {
+		MULTIPLAYER_ITEMS = 9;
+		switch (key)
+					{
+					case K_ESCAPE:
+						M_Menu_Main_f ();
+						break;
+ 
+					case K_DOWNARROW:
+						S_LocalSound ("misc/menu1.wav");
+						if (++m_multiplayer_cursor >= MULTIPLAYER_ITEMS)
+                m_multiplayer_cursor = 0;
+						break;
+ 
+					case K_UPARROW:
+						S_LocalSound ("misc/menu1.wav");
+						if (--m_multiplayer_cursor < 0)
+							m_multiplayer_cursor = MULTIPLAYER_ITEMS - 1;
+						break;
+ 
+					case K_ENTER:
+						m_entersound = true;
+						switch (m_multiplayer_cursor)
+										{
+						case 0:
+							if (serialAvailable || ipxAvailable || tcpipAvailable)
+								M_Menu_LanConfig_f ();
+							break;
+		
+						case 1:
+							if (serialAvailable || ipxAvailable || tcpipAvailable)
+								M_Menu_LanConfig_f ();
+							else
+								M_Menu_GameOptions_f ();
+							break;
+ 
+						case 2:
+							M_Menu_Setup_f ();
+							break;
+ 
+						case 3:
+							Datagram_Shutdown();
+ 
+							tcpipAvailable = !tcpipAvailable;
+ 
+							if(tcpipAvailable) {
+								tcpipAdhoc = false;
+								net_driver_to_use = 0;
+								Datagram_Init();
+						}
+ 
+							break;
+ 
+						case 4:
+							Datagram_Shutdown();
+ 
+							tcpipAvailable = !tcpipAvailable;
+ 
+							if(tcpipAvailable) {
+								tcpipAdhoc = true;
+								net_driver_to_use = 1;
+								Datagram_Init();
+							}
+ 
+							break;
+           
+						if (strstr(com_gamedir, "FROGBOT")) {
+ 
+							case 5: // add bot
+								Cbuf_AddText ("addbot\n");
+								break;
+ 
+							case 6: // add team bot
+								Cbuf_AddText ("addbot 0\n");
+								break;
+ 
+							case 7: // remove bot
+								Cbuf_AddText ("removebot\n");
+								break;
+ 
+							case 8: // player camera switch
+								if (coop.value)
+									Cbuf_AddText ("impulse 103\n");
+								break;
+						}
+ 
+						}
+						}
+				}
+	else
 		{
-		case 0:
-			if (serialAvailable || ipxAvailable || tcpipAvailable)
-			    M_Menu_LanConfig_f ();
-			break;
-
-		case 1:
-			if (serialAvailable || ipxAvailable || tcpipAvailable)
-			    M_Menu_LanConfig_f ();
-			else
-			    M_Menu_GameOptions_f ();
-			break;
-
-		case 2:
-			M_Menu_Setup_f ();
-			break;
-
-#ifdef PSP
-		case 3:
-			Datagram_Shutdown();
-
-			tcpipAvailable = !tcpipAvailable;
-
-			if(tcpipAvailable) {
-				tcpipAdhoc = false;
-				net_driver_to_use = 0;
-				Datagram_Init();
-			}
-
-			break;
-
-		case 4:
-			Datagram_Shutdown();
-
-			tcpipAvailable = !tcpipAvailable;
-
-			if(tcpipAvailable) {
-				tcpipAdhoc = true;
-				net_driver_to_use = 1;
-				Datagram_Init();
-			}
-
-			break;
-
-	    case 5:	// add bot
-		    Cbuf_AddText ("impulse 101\n");
-		    break;
-
-	    case 6:	// add team bot
-		    Cbuf_AddText ("impulse 100\n");
-		    break;
-
-	    case 7:	// remove bot
-            Cbuf_AddText ("impulse 102\n");
-		    break;
-
-        case 8:	// player camera switch
-            if (coop.value)
-                Cbuf_AddText ("impulse 103\n");
-            break;
-
-#endif
-		}
-	}
-}
+		MULTIPLAYER_ITEMS = 5;
+		switch (key)
+					{
+					case K_ESCAPE:
+						M_Menu_Main_f ();
+						break;
+ 
+					case K_DOWNARROW:
+						S_LocalSound ("misc/menu1.wav");
+						if (++m_multiplayer_cursor >= MULTIPLAYER_ITEMS)
+                m_multiplayer_cursor = 0;
+						break;
+ 
+					case K_UPARROW:
+						S_LocalSound ("misc/menu1.wav");
+						if (--m_multiplayer_cursor < 0)
+							m_multiplayer_cursor = MULTIPLAYER_ITEMS - 1;
+						break;
+ 
+					case K_ENTER:
+						m_entersound = true;
+						switch (m_multiplayer_cursor)
+										{
+						case 0:
+							if (serialAvailable || ipxAvailable || tcpipAvailable)
+								M_Menu_LanConfig_f ();
+							break;
+		
+						case 1:
+							if (serialAvailable || ipxAvailable || tcpipAvailable)
+								M_Menu_LanConfig_f ();
+							else
+								M_Menu_GameOptions_f ();
+							break;
+ 
+						case 2:
+							M_Menu_Setup_f ();
+							break;
+ 
+						case 3:
+							Datagram_Shutdown();
+ 
+							tcpipAvailable = !tcpipAvailable;
+ 
+							if(tcpipAvailable) {
+								tcpipAdhoc = false;
+								net_driver_to_use = 0;
+								Datagram_Init();
+						}
+ 
+							break;
+ 
+						case 4:
+							Datagram_Shutdown();
+ 
+							tcpipAvailable = !tcpipAvailable;
+ 
+							if(tcpipAvailable) {
+								tcpipAdhoc = true;
+								net_driver_to_use = 1;
+								Datagram_Init();
+							}
+ 
+							break;
+           
+						if (strstr(com_gamedir, "FROGBOT")) {
+ 
+							case 5: // add bot
+								Cbuf_AddText ("addbot\n");
+								break;
+ 
+							case 6: // add team bot
+								Cbuf_AddText ("addbot 0\n");
+								break;
+ 
+							case 7: // remove bot
+								Cbuf_AddText ("removebot\n");
+								break;
+ 
+							case 8: // player camera switch
+								if (coop.value)
+									Cbuf_AddText ("impulse 103\n");
+								break;
+						}
+ 
+						}
+						}
+				}
+}	
 
 //=============================================================================
 /* SETUP MENU */
@@ -1092,14 +1199,14 @@ char    setup_accesspoint[64];
 void M_Menu_Setup_f (void)
 {
 	key_dest = key_menu;
-	m_state = m_setup;
+	menu_state = m_setup;
 	m_entersound = true;
-	Q_strcpy(setup_myname, cl_name.string);
-	Q_strcpy(setup_hostname, hostname.string);
+	strcpy(setup_myname, cl_name.string);
+	strcpy(setup_hostname, hostname.string);
 	setup_top = setup_oldtop = ((int)cl_color.value) >> 4;
 	setup_bottom = setup_oldbottom = ((int)cl_color.value) & 15;
 
-#ifdef PSP
+#ifdef PSP_NETWORKING_CODE
 	if(totalAccessPoints)
 	{
 	    sceUtilityGetNetParam(accessPointNumber[(int)accesspoint.value], 0, (netData*)setup_accesspoint);
@@ -1200,12 +1307,12 @@ void M_Setup_Draw (void)
 }
 
 
-void M_Setup_Key (int k)
+void M_Setup_Key (int key)
 {
 	int	l;
 	int	offset = 0;
 
-	switch (k)
+	switch (key)
 	{
 	case K_ESCAPE:
 		M_Menu_MultiPlayer_f ();
@@ -1232,7 +1339,7 @@ void M_Setup_Key (int k)
 			S_LocalSound ("misc/menu3.wav");
 			if(accesspoint.value > 1)
 			{
-				Cvar_SetValue("accesspoint", accesspoint.value-1);
+				Cvar_SetValueByRef (&accesspoint, accesspoint.value-1);
 				sceUtilityGetNetParam(accessPointNumber[(int)accesspoint.value], 0, (netData*)setup_accesspoint);
 			}
 		}
@@ -1259,7 +1366,7 @@ void M_Setup_Key (int k)
 			S_LocalSound ("misc/menu3.wav");
 			if(accesspoint.value < totalAccessPoints)
 			{
-				Cvar_SetValue("accesspoint", accesspoint.value+1);
+				Cvar_SetValueByRef (&accesspoint, accesspoint.value+1);
 				sceUtilityGetNetParam(accessPointNumber[(int)accesspoint.value], 0, (netData*)setup_accesspoint);
 			}
 		}
@@ -1314,10 +1421,10 @@ forward:
 			break;
 
 		// setup_cursor == 4 (OK)
-		if (Q_strcmp(cl_name.string, setup_myname) != 0)
+		if (strcmp(cl_name.string, setup_myname) != 0)
 			Cbuf_AddText ( va ("name \"%s\"\n", setup_myname) );
-		if (Q_strcmp(hostname.string, setup_hostname) != 0)
-			Cvar_Set("hostname", setup_hostname);
+		if (strcmp(hostname.string, setup_hostname) != 0)
+			Cvar_SetStringByRef (&hostname, setup_hostname);
 		if (setup_top != setup_oldtop || setup_bottom != setup_oldbottom)
 			Cbuf_AddText( va ("color %i %i\n", setup_top, setup_bottom) );
 		m_entersound = true;
@@ -1342,7 +1449,7 @@ forward:
 		break;
 
 	default:
-		if (k < 32 || k > 127)
+		if (key < 32 || key > 127)
 			break;
 
 #ifdef PSP
@@ -1355,7 +1462,7 @@ forward:
 			if (l < 15)
 			{
 				setup_hostname[l+1] = 0;
-				setup_hostname[l] = k;
+				setup_hostname[l] = key;
 			}
 		}
 		if (setup_cursor == 1+offset)
@@ -1364,7 +1471,7 @@ forward:
 			if (l < 15)
 			{
 				setup_myname[l+1] = 0;
-				setup_myname[l] = k;
+				setup_myname[l] = key;
 			}
 		}
 	}
@@ -1413,7 +1520,7 @@ char *net_helpMessage [] =
 void M_Menu_Net_f (void)
 {
 	key_dest = key_menu;
-	m_state = m_net;
+	menu_state = m_net;
 	m_entersound = true;
 	m_net_items = 4;
 
@@ -1503,15 +1610,15 @@ void M_Net_Draw (void)
 	M_Print (f, 158, net_helpMessage[m_net_cursor*4+2]);
 	M_Print (f, 166, net_helpMessage[m_net_cursor*4+3]);
 
-	f = (int)(host_time * 10)%6;
+	f = (int)(realtime * 10)%6;
 	M_DrawTransPic (54, 32 + m_net_cursor * 20,Draw_CachePic( va("gfx/menudot%i.lmp", f+1 ) ) );
 }
 
 
-void M_Net_Key (int k)
+void M_Net_Key (int key)
 {
 again:
-	switch (k)
+	switch (key)
 	{
 	case K_ESCAPE:
 		M_Menu_MultiPlayer_f ();
@@ -1636,11 +1743,6 @@ enum
 {
 	OPT_SUBMENU_3 = OPT_SUBMENU,
     OPT_GAP_3,
-	OPT_FOG_START,
-	OPT_FOG_END,
-	OPT_FOG_RED,
-	OPT_FOG_GREEN,
-	OPT_FOG_BLUE,
     OPT_GAP_3_1,
     OPT_SCRSIZE,
 	OPT_WATERTRANS,
@@ -1648,6 +1750,9 @@ enum
 	OPT_TEX_SCALEDOWN,
 	OPT_SMOOTH_ANIMS,
 	OPT_SMOOTH_MOVEMENT,
+	OPT_CROSSHAIR,
+	OPT_AIM_ASSIST,
+	OPT_AUTOAIM,
     OPTIONS_ITEMS_3
 };
 
@@ -1697,7 +1802,7 @@ int m_submenu = 0;
 void M_Menu_Options_f (void)
 {
 	key_dest = key_menu;
-	m_state = m_options;
+	menu_state = m_options;
 	m_entersound = true;
 }
 
@@ -1736,12 +1841,12 @@ void M_AdjustSliders (int dir)
     	switch (options_cursor)
         {
        		case OPT_IN_SPEED:	// mouse speed
-				in_sensitivity.value += dir * 1;
-				if (in_sensitivity.value < 1)
-					in_sensitivity.value = 1;
-				if (in_sensitivity.value > 33)
-					in_sensitivity.value = 33;
-				Cvar_SetValue ("sensitivity", in_sensitivity.value);
+				sensitivity.value += dir * 1;
+				if (sensitivity.value < 1)
+					sensitivity.value = 1;
+				if (sensitivity.value > 33)
+					sensitivity.value = 33;
+				Cvar_SetValueByRef (&sensitivity, sensitivity.value);
 				break;
 
        		case OPT_IN_TOLERANCE:	// mouse tolerance
@@ -1750,7 +1855,7 @@ void M_AdjustSliders (int dir)
 					in_tolerance.value = 0;
 				if (in_tolerance.value > 0.5)
 					in_tolerance.value = 0.5;
-				Cvar_SetValue ("tolerance", in_tolerance.value);
+				Cvar_SetValueByRef (&in_tolerance, in_tolerance.value);
 				break;
 
        		case OPT_IN_ACCELERATION:	// mouse tolerance
@@ -1759,7 +1864,7 @@ void M_AdjustSliders (int dir)
 					in_acceleration.value = 0.5;
 				if (in_acceleration.value > 2)
 					in_acceleration.value = 2;
-				Cvar_SetValue ("acceleration", in_acceleration.value);
+				Cvar_SetValueByRef (&in_acceleration, in_acceleration.value);
 				break;
 
 			case OPT_IN_X_ADJUST:
@@ -1768,7 +1873,7 @@ void M_AdjustSliders (int dir)
 					in_x_axis_adjust.value = 1;
 				if (in_x_axis_adjust.value > 11)
 					in_x_axis_adjust.value = 11;
-				Cvar_SetValue ("in_x_axis_adjust", in_x_axis_adjust.value);
+				Cvar_SetValueByRef (&in_x_axis_adjust, in_x_axis_adjust.value);
 				break;
 
 			case OPT_IN_Y_ADJUST:
@@ -1777,54 +1882,54 @@ void M_AdjustSliders (int dir)
 					in_y_axis_adjust.value = 1;
 				if (in_y_axis_adjust.value > 11)
 					in_y_axis_adjust.value = 11;
-				Cvar_SetValue ("in_y_axis_adjust", in_y_axis_adjust.value);
+				Cvar_SetValueByRef (&in_y_axis_adjust, in_y_axis_adjust.value);
 				break;
 
 			case OPT_INVMOUSE:	// invert mouse
-				Cvar_SetValue ("m_pitch", -m_pitch.value);
+				Cvar_SetValueByRef (&m_pitch, -m_pitch.value);
 				break;
 
 			case OPT_NOMOUSE:	// disable mouse
-				Cvar_SetValue ("in_disable_analog", !in_disable_analog.value);
+				Cvar_SetValueByRef (&in_disable_analog, !in_disable_analog.value);
 				break;
 
 			case OPT_AUTOCENTER: // auto center looking for digital keys
-				Cvar_SetValue ("lookcenter", !lookcenter.value);
+				Cvar_SetValueByRef (&lookcenter, !lookcenter.value);
 				break;
 
 			case OPT_MOUSESTRAFE:
-				Cvar_SetValue ("in_analog_strafe", !in_analog_strafe.value);
+				Cvar_SetValueByRef (&in_analog_strafe, !in_analog_strafe.value);
 				break;
 
 			case OPT_MOUSELOOK:
-				Cvar_SetValue ("in_freelook_analog", !in_freelook_analog.value);
+				Cvar_SetValueByRef (&in_freelook_analog, !in_freelook_analog.value);
 				break;
 
-			case OPT_ALWAYRUN:	// allways run
+			case OPT_ALWAYRUN:	// always run
 	            if (kurok)
 	            {
 		            if (cl_forwardspeed.value > 150)
 	                {
-        			    Cvar_SetValue ("cl_forwardspeed", 150);
-           			    Cvar_SetValue ("cl_backspeed", 150);
+        			    Cvar_SetValueByRef (&cl_forwardspeed, 150);
+           			    Cvar_SetValueByRef (&cl_backspeed, 150);
         	    	}
         		    else
         		    {
-        		    	Cvar_SetValue ("cl_forwardspeed", 200);
-        		    	Cvar_SetValue ("cl_backspeed", 200);
+        		    	Cvar_SetValueByRef (&cl_forwardspeed, 200);
+        		    	Cvar_SetValueByRef (&cl_backspeed, 200);
         	    	}
                 }
             	else
             	{
             		if (cl_forwardspeed.value > 200)
             		{
-            			Cvar_SetValue ("cl_forwardspeed", 200);
-            			Cvar_SetValue ("cl_backspeed", 200);
+            			Cvar_SetValueByRef (&cl_forwardspeed, 200);
+            			Cvar_SetValueByRef (&cl_backspeed, 200);
             		}
             		else
             		{
-        	    		Cvar_SetValue ("cl_forwardspeed", 400);
-        	    		Cvar_SetValue ("cl_backspeed", 400);
+        	    		Cvar_SetValueByRef (&cl_forwardspeed, 400);
+        	    		Cvar_SetValueByRef (&cl_backspeed, 400);
                     }
         		}
         		break;
@@ -1835,49 +1940,49 @@ void M_AdjustSliders (int dir)
        	switch (options_cursor)
         {
 			case OPT_GAMMA:	// gamma
-				v_gamma.value -= dir * 0.05;
-				if (v_gamma.value < 0.5)
-					v_gamma.value = 0.5;
-				if (v_gamma.value > 1)
-					v_gamma.value = 1;
-				Cvar_SetValue ("gamma", v_gamma.value);
+				vold_gamma.value -= dir * 0.05;
+				if (vold_gamma.value < 0.5)
+					vold_gamma.value = 0.5;
+				if (vold_gamma.value > 1)
+					vold_gamma.value = 1;
+				Cvar_SetValueByRef (&vold_gamma, vold_gamma.value);
 				break;
 
 	        case OPT_MAXFPS:	// frame rate controller
-		        max_fps.value += dir * 5;
-		        if (max_fps.value < 30)
-			        max_fps.value = 30;
-		        if (max_fps.value > 65)
-			        max_fps.value = 65;
-                Cvar_SetValue ("max_fps", max_fps.value);
+		        pq_maxfps.value += dir * 5;
+		        if (pq_maxfps.value < 30)
+			        pq_maxfps.value = 30;
+		        if (pq_maxfps.value > 65)
+			        pq_maxfps.value = 65;
+                Cvar_SetValueByRef (&pq_maxfps, pq_maxfps.value);
 		        break;
 
 			case OPT_VSYNC:
-				Cvar_SetValue ("r_vsync", !r_vsync.value);
+				Cvar_SetValueByRef (&r_vsync, !r_vsync.value);
 				break;
 
 			case OPT_MODEL_BRIGHTNESS:
-				Cvar_SetValue ("r_model_brightness", !r_model_brightness.value);
+				Cvar_SetValueByRef (&r_model_brightness, !r_model_brightness.value);
 				break;
 
 			case OPT_FPS:
-				Cvar_SetValue ("show_fps", !show_fps.value);
+				Cvar_SetValueByRef (&pq_drawfps, !pq_drawfps.value);
 				break;
 
             case OPT_DYNAMIC:
-				Cvar_SetValue ("r_dynamic", !r_dynamic.value);
+				Cvar_SetValueByRef (&r_dynamic, !r_dynamic.value);
 				break;
 #ifdef PSP_HARDWARE_VIDEO
 			case OPT_SIMPLE_PART:
-				Cvar_SetValue ("r_particles_simple", !r_particles_simple.value);
+				Cvar_SetValueByRef (&r_particles_simple, !r_particles_simple.value);
 				break;
 
 			case OPT_ANTIALIAS:
-				Cvar_SetValue ("r_antialias", !r_antialias.value);
+				Cvar_SetValueByRef (&r_antialias, !r_antialias.value);
 				break;
 
 			case OPT_MIPMAPS:
-				Cvar_SetValue ("r_mipmaps", !r_mipmaps.value);
+				Cvar_SetValueByRef (&r_mipmaps, !r_mipmaps.value);
 				break;
 #endif
         }
@@ -1893,7 +1998,7 @@ void M_AdjustSliders (int dir)
 					track = 1;
 				if (track > 13)
 					track = 13;
-				Cvar_SetValue ("cd play", track);
+				Cvar_SetValueByRef (&cd play, track);
 				break;
 */
 			case OPT_MUSICVOL:	// music volume
@@ -1906,7 +2011,7 @@ void M_AdjustSliders (int dir)
 					bgmvolume.value = 0;
 				if (bgmvolume.value > 1)
 					bgmvolume.value = 1;
-				Cvar_SetValue ("bgmvolume", bgmvolume.value);
+				Cvar_SetValueByRef (&bgmvolume, bgmvolume.value);
 #ifdef PSP_MP3HARDWARE_MP3LIB
 		        changeMp3Volume = 1;
 #endif
@@ -1918,18 +2023,18 @@ void M_AdjustSliders (int dir)
 					volume.value = 0;
 				if (volume.value > 1)
 					volume.value = 1;
-				Cvar_SetValue ("volume", volume.value);
+				Cvar_SetValueByRef (&volume, volume.value);
 				break;
 /*
 			case OPT_MUSICTYPE: // bgm type
 				if (strcmpi(bgmtype.string,"cd") == 0)
 				{
-						Cvar_Set("bgmtype","none");
+						Cvar_SetStringByRef (&bgmtype, "none");
 						bmg_type_changed = true;
 				}
 				else
 				{
-						Cvar_Set("bgmtype","cd");
+						Cvar_SetStringByRef (&bgmtype, "cd");
 						bmg_type_changed = true;
 				}
 				break;
@@ -1940,53 +2045,13 @@ void M_AdjustSliders (int dir)
     {
        	switch (options_cursor)
         {
-			case OPT_FOG_START:	// Fog start distance from viewpoint
-				r_refdef.fog_start += dir * 100;
-				if (r_refdef.fog_start < -5000)
-					r_refdef.fog_start = -5000;
-				if (r_refdef.fog_start > 5000)
-					r_refdef.fog_start = 5000;
-				break;
-
-			case OPT_FOG_END:	// Fog end distance from viewpoint
-				r_refdef.fog_end += dir * 100;
-				if (r_refdef.fog_end < -5000)
-					r_refdef.fog_end = -5000;
-				if (r_refdef.fog_end > 5000)
-					r_refdef.fog_end = 5000;
-				break;
-
-			case OPT_FOG_RED:	// Fog red
-				r_refdef.fog_red += dir * 5;
-				if (r_refdef.fog_red < 0)
-					r_refdef.fog_red = 0;
-				if (r_refdef.fog_red > 100)
-					r_refdef.fog_red = 100;
-				break;
-
-			case OPT_FOG_GREEN:	// Fog green
-				r_refdef.fog_green += dir * 5;
-				if (r_refdef.fog_green < 0)
-					r_refdef.fog_green = 0;
-				if (r_refdef.fog_green > 100)
-					r_refdef.fog_green = 100;
-				break;
-
-			case OPT_FOG_BLUE:	// Fog blue
-				r_refdef.fog_blue += dir * 5;
-				if (r_refdef.fog_blue < 0)
-					r_refdef.fog_blue = 0;
-				if (r_refdef.fog_blue > 100)
-					r_refdef.fog_blue = 100;
-				break;
-
 			case OPT_SCRSIZE:	// screen size
 				scr_viewsize.value += dir * 10;
 				if (scr_viewsize.value < 30)
 					scr_viewsize.value = 30;
 				if (scr_viewsize.value > 130)
 					scr_viewsize.value = 130;
-				Cvar_SetValue ("viewsize", scr_viewsize.value);
+				Cvar_SetValueByRef (&scr_viewsize, scr_viewsize.value);
 				break;
 
 			case OPT_WATERTRANS:	// wateralpha
@@ -1996,7 +2061,7 @@ void M_AdjustSliders (int dir)
 				if (r_wateralpha.value > 1)
 					r_wateralpha.value = 1;
 
-				Cvar_SetValue ("r_wateralpha", r_wateralpha.value);
+				Cvar_SetValueByRef (&r_wateralpha, r_wateralpha.value);
 				break;
 
 			case OPT_MIPMAP_BIAS:	// mipmapping bais
@@ -2006,20 +2071,50 @@ void M_AdjustSliders (int dir)
 				if (r_mipmaps_bias.value > 0)
 					r_mipmaps_bias.value = 0;
 
-				Cvar_SetValue ("r_mipmaps_bias", r_mipmaps_bias.value);
+				Cvar_SetValueByRef (&r_mipmaps_bias, r_mipmaps_bias.value);
 				break;
 
 			case OPT_TEX_SCALEDOWN:
-				Cvar_SetValue ("r_tex_scale_down", !r_tex_scale_down.value);
+				Cvar_SetValueByRef (&r_tex_scale_down, !r_tex_scale_down.value);
 				break;
 
 			case OPT_SMOOTH_ANIMS:
-				Cvar_SetValue ("r_i_model_animation", !r_i_model_animation.value);
+				Cvar_SetValueByRef (&r_interpolate_animation, !r_interpolate_animation.value);
 				break;
 
 			case OPT_SMOOTH_MOVEMENT:
-				Cvar_SetValue ("r_i_model_transform", !r_i_model_transform.value);
+				Cvar_SetValueByRef (&r_interpolate_transform, !r_interpolate_transform.value);
 				break;
+				
+			case OPT_CROSSHAIR:
+				Cvar_SetValueByRef (&crosshair, !crosshair.value);
+				break;
+			case OPT_AIM_ASSIST:	// sv_aim assist
+				sv_aim.value += dir * 0.1;
+				if (sv_aim.value < 0.99)
+					sv_aim.value = .8;
+				if (sv_aim.value > 1)
+					sv_aim.value = 1;
+				Cvar_SetValueByRef (&sv_aim, sv_aim.value);
+				break;
+			case OPT_AUTOAIM:
+				Cvar_SetValueByRef (&cl_autoaim, !cl_autoaim.value);
+					if (cl_autoaim.value){
+					sv_aim.value = .8;
+					Cvar_SetValueByRef (&sv_aim, sv_aim.value);
+					}
+				break;
+				
+			/*
+			
+				volume.value += dir * 0.1;
+				if (volume.value < 0)
+					volume.value = 0;
+				if (volume.value > 1)
+					volume.value = 1;
+				Cvar_SetValueByRef (&volume, volume.value);
+			
+			*/
         }
     }
 }
@@ -2084,7 +2179,7 @@ void M_Options_Draw (void)
 		#else
 			M_Print (16, offset+(OPT_IN_SPEED*8), 		 "           Mouse Speed");
 		#endif
-			r = (in_sensitivity.value - 1)/33;
+			r = (sensitivity.value - 1)/33;
 			M_DrawSlider (220, offset+(OPT_IN_SPEED*8), r);
 
 			M_Print (16, offset+(OPT_IN_ACCELERATION*8), "   Analog Acceleration");
@@ -2136,24 +2231,31 @@ void M_Options_Draw (void)
         case 1:
 
 			M_Print (16, offset+(OPT_GAMMA*8), 	   "            Brightness");
-			r = (1.0 - v_gamma.value) / 0.5;
+			r = (1.0 - vold_gamma.value) / 0.5;
 			M_DrawSlider (220, offset+(OPT_GAMMA*8), r);
 
 			M_Print (16, offset+(OPT_VSYNC*8),     "                 VSync");
 			M_DrawCheckbox (220, offset+(OPT_VSYNC*8), r_vsync.value);
 
+			if (cl.gametype == GAME_DEATHMATCH)
+			{
+			M_Print (16, offset+(OPT_DYNAMIC*8),   "Dynamic Light Disabled");
+			}
+			else
+			{
 			M_Print (16, offset+(OPT_DYNAMIC*8),   "      Dynamic Lighting");
 			M_DrawCheckbox (220, offset+(OPT_DYNAMIC*8), r_dynamic.value);
+			}
 
 			M_Print (16, offset+(OPT_MODEL_BRIGHTNESS*8),	"       Brighter Models");
 			M_DrawCheckbox (220, offset+(OPT_MODEL_BRIGHTNESS*8), r_model_brightness.value);
 
 	        M_Print (16, offset+(OPT_MAXFPS*8),    "    Maximum Frame Rate");
-	        r = (max_fps.value - 30) / (65 - 30);
+	        r = (pq_maxfps.value - 30) / (65 - 30);
 	        M_DrawSlider (220, offset+(OPT_MAXFPS*8), r);
 
 			M_Print (16, offset+(OPT_FPS*8), "    Display Frame rate");
-			M_DrawCheckbox (220, offset+(OPT_FPS*8), show_fps.value);
+			M_DrawCheckbox (220, offset+(OPT_FPS*8), pq_drawfps.value);
 
 		#ifdef PSP_HARDWARE_VIDEO
 
@@ -2194,26 +2296,6 @@ void M_Options_Draw (void)
 
         case 3:
 
-			M_Print (16, offset+(OPT_FOG_START*8),			"    Fog start distance");
-			r = (r_refdef.fog_start - (-5000)) / ((5000) - (-5000));
-			M_DrawSlider (220, offset+(OPT_FOG_START*8), r);
-
-			M_Print (16, offset+(OPT_FOG_END*8),			"      Fog end distance");
-			r = (r_refdef.fog_end - (-5000)) / ((5000) - (-5000));
-			M_DrawSlider (220, offset+(OPT_FOG_END*8), r);
-
-			M_Print (16, offset+(OPT_FOG_RED*8),			"        Fog red amount");
-			r = (r_refdef.fog_red) / 100;
-			M_DrawSlider (220, offset+(OPT_FOG_RED*8), r);
-
-			M_Print (16, offset+(OPT_FOG_GREEN*8),			"      Fog green amount");
-			r = (r_refdef.fog_green) / 100;
-			M_DrawSlider (220, offset+(OPT_FOG_GREEN*8), r);
-
-			M_Print (16, offset+(OPT_FOG_BLUE*8),			"       Fog blue amount");
-			r = (r_refdef.fog_blue) / 100;
-			M_DrawSlider (220, offset+(OPT_FOG_BLUE*8), r);
-
 			M_Print (16, offset+(OPT_SCRSIZE*8),			"           Screen size");
 			r = (scr_viewsize.value - 30) / (130 - 30);
 			M_DrawSlider (220, offset+(OPT_SCRSIZE*8), r);
@@ -2229,11 +2311,21 @@ void M_Options_Draw (void)
 			M_DrawCheckbox (220, offset+(OPT_TEX_SCALEDOWN*8), r_tex_scale_down.value);
 
 			M_Print (16, offset+(OPT_SMOOTH_ANIMS*8),		"Smooth Model Animation");
-			M_DrawCheckbox (220, offset+(OPT_SMOOTH_ANIMS*8), r_i_model_animation.value);
+			M_DrawCheckbox (220, offset+(OPT_SMOOTH_ANIMS*8), r_interpolate_animation.value);
 
 			M_Print (16, offset+(OPT_SMOOTH_MOVEMENT*8),	" Smooth Model Movement");
-			M_DrawCheckbox (220, offset+(OPT_SMOOTH_MOVEMENT*8), r_i_model_transform.value);
-
+			M_DrawCheckbox (220, offset+(OPT_SMOOTH_MOVEMENT*8), r_interpolate_transform.value);
+			
+			M_Print (16, offset+(OPT_CROSSHAIR*8), 			"             Crosshair");
+			M_DrawCheckbox (220,offset+(OPT_CROSSHAIR*8), crosshair.value);
+			
+			M_Print (16, offset+(OPT_AIM_ASSIST*8),			"   Vertical Aim Assist");
+			r = sv_aim.value;
+			M_DrawCheckboxReverse  (220, offset+(OPT_AIM_ASSIST*8), r);
+			
+			M_Print (16, offset+(OPT_AUTOAIM*8), 	    "               EasyAim");
+			M_DrawCheckbox (230,offset+(OPT_AUTOAIM*8), cl_autoaim.value);
+			
             break;
 
 	}
@@ -2259,9 +2351,9 @@ void M_Options_Draw (void)
 }
 
 
-void M_Options_Key (int k)
+void M_Options_Key (int key)
 {
-	switch (k)
+	switch (key)
 	{
 	case K_ESCAPE:
 		M_Menu_Main_f ();
@@ -2275,7 +2367,7 @@ void M_Options_Key (int k)
 			M_Menu_Keys_f ();
 			break;
 		case OPT_CONSOLE:
-			m_state = m_none;
+			menu_state = m_none;
 			Con_ToggleConsole_f ();
 			break;
 		case OPT_DEFAULTS1:
@@ -2504,7 +2596,7 @@ int		bind_grab;
 void M_Menu_Keys_f (void)
 {
 	key_dest = key_menu;
-	m_state = m_keys;
+	menu_state = m_keys;
 	m_entersound = true;
 }
 
@@ -2652,7 +2744,7 @@ void M_Keys_Draw (void)
 }
 
 
-void M_Keys_Key (int k)
+void M_Keys_Key (int key)
 {
 	char	cmd[80];
 	int		keys[2];
@@ -2660,16 +2752,16 @@ void M_Keys_Key (int k)
 	if (bind_grab)
 	{	// defining a key
 		S_LocalSound ("misc/menu1.wav");
-		if (k == K_ESCAPE)
+		if (key == K_ESCAPE)
 		{
 			bind_grab = false;
 		}
-		else if (k != '`')
+		else if (key != '`')
 		{
             if (kurok)
-			    sprintf (cmd, "bind \"%s\" \"%s\"\n", Key_KeynumToString (k), kbindnames[keys_cursor][0]);
+			    snprintf(cmd, sizeof(cmd),  "bind \"%s\" \"%s\"\n", Key_KeynumToString (key), kbindnames[keys_cursor][0]);
 			else
-			    sprintf (cmd, "bind \"%s\" \"%s\"\n", Key_KeynumToString (k), bindnames[keys_cursor][0]);
+			    snprintf(cmd, sizeof(cmd),  "bind \"%s\" \"%s\"\n", Key_KeynumToString (key), bindnames[keys_cursor][0]);
 			Cbuf_InsertText (cmd);
 		}
 
@@ -2677,7 +2769,7 @@ void M_Keys_Key (int k)
 		return;
 	}
 
-	switch (k)
+	switch (key)
 	{
 	case K_ESCAPE:
 		M_Menu_Options_f ();
@@ -2745,7 +2837,7 @@ void M_Keys_Key (int k)
 void M_Menu_Video_f (void)
 {
 	key_dest = key_menu;
-	m_state = m_video;
+	menu_state = m_video;
 	m_entersound = true;
 }
 
@@ -2772,7 +2864,7 @@ int		help_page;
 void M_Menu_Help_f (void)
 {
 	key_dest = key_menu;
-	m_state = m_help;
+	menu_state = m_help;
 	m_entersound = true;
 	help_page = 0;
 }
@@ -2884,12 +2976,12 @@ char *quitMessage [] =
 
 void M_Menu_Quit_f (void)
 {
-	if (m_state == m_quit)
+	if (menu_state == m_quit)
 		return;
 	wasInMenus = (key_dest == key_menu);
 	key_dest = key_menu;
-	m_quit_prevstate = m_state;
-	m_state = m_quit;
+	m_quit_prevstate = menu_state;
+	menu_state = m_quit;
 	m_entersound = true;
 	msgNumber = rand()&7;
 }
@@ -2904,13 +2996,13 @@ void M_Quit_Key (int key)
 	case 'N':
 		if (wasInMenus)
 		{
-			m_state = m_quit_prevstate;
+			menu_state = m_quit_prevstate;
 			m_entersound = true;
 		}
 		else
 		{
 			key_dest = key_game;
-			m_state = m_none;
+			menu_state = m_none;
 		}
 		break;
 
@@ -2934,10 +3026,10 @@ void M_Quit_Draw (void)
 {
 	if (wasInMenus)
 	{
-		m_state = m_quit_prevstate;
+		menu_state = m_quit_prevstate;
 		m_recursiveDraw = true;
 		M_Draw ();
-		m_state = m_quit;
+		menu_state = m_quit;
 	}
 
 #ifdef WIN32
@@ -3023,8 +3115,8 @@ char *osk_help [] =
 void M_Menu_OSK_f (char *input, char *output, int outlen)
 {
 	key_dest = key_menu;
-	m_old_state = m_state;
-	m_state = m_osk;
+	m_old_state = menu_state;
+	menu_state = m_osk;
 	m_entersound = false;
 	max_len = outlen;
 	strncpy(osk_buffer,input,max_len);
@@ -3142,10 +3234,10 @@ void M_OSK_Key (int key)
 	case K_INS:
 		strncpy(osk_out_buff,osk_buffer,max_len);
 
-		m_state = m_old_state;
+		menu_state = m_old_state;
 		break;
 	case K_ESCAPE:
-		m_state = m_old_state;
+		menu_state = m_old_state;
 		break;
 	default:
 		break;
@@ -3235,7 +3327,7 @@ void M_Menu_SerialConfig_f (void)
 	qboolean	useModem;
 
 	key_dest = key_menu;
-	m_state = m_serialconfig;
+	menu_state = m_serialconfig;
 	m_entersound = true;
 	if (JoiningGame && SerialConfig)
 		serialConfig_cursor = 4;
@@ -3457,10 +3549,10 @@ forward:
 			break;
 		}
 
-		m_return_state = m_state;
+		m_return_state = menu_state;
 		m_return_onerror = true;
 		key_dest = key_game;
-		m_state = m_none;
+		menu_state = m_none;
 
         // If we were in a multiplayer game, reset all the deathmatch flags to 0;
 
@@ -3547,7 +3639,7 @@ char	modemConfig_hangup [16];
 void M_Menu_ModemConfig_f (void)
 {
 	key_dest = key_menu;
-	m_state = m_modemconfig;
+	menu_state = m_modemconfig;
 	m_entersound = true;
 	(*GetModemConfig) (0, &modemConfig_dialing, modemConfig_clear, modemConfig_init, modemConfig_hangup);
 }
@@ -3722,7 +3814,7 @@ char	lanConfig_joinname[22];
 void M_Menu_LanConfig_f (void)
 {
 	key_dest = key_menu;
-	m_state = m_lanconfig;
+	menu_state = m_lanconfig;
 	m_entersound = true;
 	if (lanConfig_cursor == -1)
 	{
@@ -3734,7 +3826,7 @@ void M_Menu_LanConfig_f (void)
 	if (StartingGame && lanConfig_cursor == 2)
 		lanConfig_cursor = 1;
 	lanConfig_port = DEFAULTnet_hostport;
-	sprintf(lanConfig_portname, "%u", lanConfig_port);
+	snprintf(lanConfig_portname, sizeof(lanConfig_portname), "%u", lanConfig_port);
 
 	m_return_onerror = false;
 	m_return_reason[0] = 0;
@@ -3878,10 +3970,10 @@ void M_LanConfig_Key (int key)
 
 		if (lanConfig_cursor == 2)
 		{
-			m_return_state = m_state;
+			m_return_state = menu_state;
 			m_return_onerror = true;
 			key_dest = key_game;
-			m_state = m_none;
+			menu_state = m_none;
 
             // If we were in a multiplayer game, reset all the deathmatch flags to 0;
 
@@ -3961,12 +4053,12 @@ void M_LanConfig_Key (int key)
 			lanConfig_cursor = 0;
 	}
 
-	l =  Q_atoi(lanConfig_portname);
+	l =  atoi(lanConfig_portname);
 	if (l > 65535)
 		l = lanConfig_port;
 	else
 		lanConfig_port = l;
-	sprintf(lanConfig_portname, "%u", lanConfig_port);
+	snprintf(lanConfig_portname, sizeof(lanConfig_portname), "%u", lanConfig_port);
 }
 
 //=============================================================================
@@ -4152,7 +4244,7 @@ double m_serverInfoMessageTime;
 void M_Menu_GameOptions_f (void)
 {
 	key_dest = key_menu;
-	m_state = m_gameoptions;
+	menu_state = m_gameoptions;
 	m_entersound = true;
 	if (maxplayers == 0)
 		maxplayers = svs.maxclients;
@@ -4256,12 +4348,6 @@ void M_GameOptions_Draw (void)
 	else
 		M_Print (160, 96, va("%i minutes", (int)timelimit.value));
 
-	M_PrintWhite (0, 104, "        Auto Aim");
-	if (sv_aim.value == 1)
-		M_Print (160, 104, "Off");
-	else
-		M_Print (160, 104, "On");
-
 	M_PrintWhite (0, 112, "      Level Exits");
 	if (noexit.value == 1)
 		M_Print (160, 112, "Off");
@@ -4349,7 +4435,7 @@ void M_NetStart_Change (int dir)
 		break;
 
 	case 2:
-		Cvar_SetValue ("coop", coop.value ? 0 : 1);
+		Cvar_SetValueByRef (&coop, coop.value ? 0 : 1);
 		break;
 
 	case 3:
@@ -4358,47 +4444,39 @@ void M_NetStart_Change (int dir)
 		else
 			count = 2;
 
-		Cvar_SetValue ("teamplay", teamplay.value + dir);
+		Cvar_SetValueByRef (&teamplay, teamplay.value + dir);
 		if (teamplay.value > count)
-			Cvar_SetValue ("teamplay", 0);
+			Cvar_SetValueByRef (&teamplay, 0);
 		else if (teamplay.value < 0)
-			Cvar_SetValue ("teamplay", count);
+			Cvar_SetValueByRef (&teamplay, count);
 		break;
 
 	case 4:
-		Cvar_SetValue ("skill", skill.value + dir);
+		Cvar_SetValueByRef (&skill, skill.value + dir);
 		if (skill.value > 3)
-			Cvar_SetValue ("skill", 0);
+			Cvar_SetValueByRef (&skill, 0);
 		if (skill.value < 0)
-			Cvar_SetValue ("skill", 3);
+			Cvar_SetValueByRef (&skill, 3);
 		break;
 
 	case 5:
-		Cvar_SetValue ("fraglimit", fraglimit.value + dir*10);
+		Cvar_SetValueByRef (&fraglimit, fraglimit.value + dir*10);
 		if (fraglimit.value > 100)
-			Cvar_SetValue ("fraglimit", 0);
+			Cvar_SetValueByRef (&fraglimit, 0);
 		if (fraglimit.value < 0)
-			Cvar_SetValue ("fraglimit", 100);
+			Cvar_SetValueByRef (&fraglimit, 100);
 		break;
 
 	case 6:
-		Cvar_SetValue ("timelimit", timelimit.value + dir*5);
+		Cvar_SetValueByRef (&timelimit, timelimit.value + dir*5);
 		if (timelimit.value > 60)
-			Cvar_SetValue ("timelimit", 0);
+			Cvar_SetValueByRef (&timelimit, 0);
 		if (timelimit.value < 0)
-			Cvar_SetValue ("timelimit", 60);
+			Cvar_SetValueByRef (&timelimit, 60);
 		break;
 
 	case 7:
-		Cvar_SetValue ("sv_aim", sv_aim.value + dir * 0.01);
-		if (sv_aim.value > 1)
-			Cvar_SetValue ("sv_aim", 0.99);
-		if (sv_aim.value < 0.99)
-			Cvar_SetValue ("sv_aim", 1);
-		break;
-
-	case 8:
-		Cvar_SetValue ("noexit", noexit.value ? 0 : 1);
+		Cvar_SetValueByRef (&noexit, noexit.value ? 0 : 1);
 		break;
 
 	case 9:
@@ -4642,7 +4720,7 @@ int		doptions_cursor;
 void M_Menu_DOptions_f (void)
 {
 	key_dest = key_menu;
-	m_state = m_doptions;
+	menu_state = m_doptions;
 	m_entersound = true;
 }
 
@@ -4674,13 +4752,13 @@ void M_AdjustDSliders (int dir)
 			if (items_respawn == 1)
 				deathmatch.value = deathmatch.value + DM_RESPAWN;
 
-			Cvar_SetValue ("deathmatch", deathmatch.value);
+			Cvar_SetValueByRef (&deathmatch, deathmatch.value);
 		}
 		else
 		{
 			items_respawn = 1;
 			deathmatch.value = 1;
-			Cvar_SetValue ("deathmatch", deathmatch.value);
+			Cvar_SetValueByRef (&deathmatch, deathmatch.value);
 
 			m_dOptionsInfoMessage = true;
 			m_dOptionsInfoMessageTime = realtime;
@@ -4709,7 +4787,7 @@ void M_AdjustDSliders (int dir)
 				deathmatch.value = deathmatch.value + DM_RESPAWN - DM_WEAPONS_STAY;
 			if (weapons_stay == 1)
 				deathmatch.value = deathmatch.value + DM_RESPAWN + DM_WEAPONS_STAY;
-			Cvar_SetValue ("deathmatch", deathmatch.value);
+			Cvar_SetValueByRef (&deathmatch, deathmatch.value);
 			break;
 		}
 
@@ -4718,7 +4796,7 @@ void M_AdjustDSliders (int dir)
 		if (weapons_stay == 1)
 			deathmatch.value = deathmatch.value + DM_WEAPONS_STAY;
 
-		Cvar_SetValue ("deathmatch", deathmatch.value);
+		Cvar_SetValueByRef (&deathmatch, deathmatch.value);
 		break;
 
 	case 3:	// Pistols
@@ -4743,7 +4821,7 @@ void M_AdjustDSliders (int dir)
 				deathmatch.value = deathmatch.value + DM_RESPAWN - DM_PISTOLS;
 			if (pistols == 1)
 				deathmatch.value = deathmatch.value + DM_RESPAWN + DM_PISTOLS;
-			Cvar_SetValue ("deathmatch", deathmatch.value);
+			Cvar_SetValueByRef (&deathmatch, deathmatch.value);
 			break;
 		}
 
@@ -4752,7 +4830,7 @@ void M_AdjustDSliders (int dir)
 		if (pistols == 1)
 			deathmatch.value = deathmatch.value + DM_PISTOLS;
 
-		Cvar_SetValue ("deathmatch", deathmatch.value);
+		Cvar_SetValueByRef (&deathmatch, deathmatch.value);
 		break;
 
 	case 4:	// Automatics
@@ -4777,7 +4855,7 @@ void M_AdjustDSliders (int dir)
 				deathmatch.value = deathmatch.value + DM_RESPAWN - DM_AUTOMATICS;
 			if (automatics == 1)
 				deathmatch.value = deathmatch.value + DM_RESPAWN + DM_AUTOMATICS;
-			Cvar_SetValue ("deathmatch", deathmatch.value);
+			Cvar_SetValueByRef (&deathmatch, deathmatch.value);
 			break;
 		}
 
@@ -4786,7 +4864,7 @@ void M_AdjustDSliders (int dir)
 		if (automatics == 1)
 			deathmatch.value = deathmatch.value + DM_AUTOMATICS;
 
-		Cvar_SetValue ("deathmatch", deathmatch.value);
+		Cvar_SetValueByRef (&deathmatch, deathmatch.value);
 		break;
 
 	case 5:	// Shotguns
@@ -4811,7 +4889,7 @@ void M_AdjustDSliders (int dir)
 				deathmatch.value = deathmatch.value + DM_RESPAWN - DM_SHOTGUNS;
 			if (shotguns == 1)
 				deathmatch.value = deathmatch.value + DM_RESPAWN + DM_SHOTGUNS;
-			Cvar_SetValue ("deathmatch", deathmatch.value);
+			Cvar_SetValueByRef (&deathmatch, deathmatch.value);
 			break;
 		}
 
@@ -4820,7 +4898,7 @@ void M_AdjustDSliders (int dir)
 		if (shotguns == 1)
 			deathmatch.value = deathmatch.value + DM_SHOTGUNS;
 
-		Cvar_SetValue ("deathmatch", deathmatch.value);
+		Cvar_SetValueByRef (&deathmatch, deathmatch.value);
 		break;
 
 	case 6:	// Explosives
@@ -4845,7 +4923,7 @@ void M_AdjustDSliders (int dir)
 				deathmatch.value = deathmatch.value + DM_RESPAWN - DM_EXPLOSIVES;
 			if (explosives == 1)
 				deathmatch.value = deathmatch.value + DM_RESPAWN + DM_EXPLOSIVES;
-			Cvar_SetValue ("deathmatch", deathmatch.value);
+			Cvar_SetValueByRef (&deathmatch, deathmatch.value);
 			break;
 		}
 
@@ -4854,7 +4932,7 @@ void M_AdjustDSliders (int dir)
 		if (explosives == 1)
 			deathmatch.value = deathmatch.value + DM_EXPLOSIVES;
 
-		Cvar_SetValue ("deathmatch", deathmatch.value);
+		Cvar_SetValueByRef (&deathmatch, deathmatch.value);
 		break;
 
 	case 7:	// Snipers
@@ -4879,7 +4957,7 @@ void M_AdjustDSliders (int dir)
 				deathmatch.value = deathmatch.value + DM_RESPAWN - DM_SNIPERS;
 			if (snipers == 1)
 				deathmatch.value = deathmatch.value + DM_RESPAWN + DM_SNIPERS;
-			Cvar_SetValue ("deathmatch", deathmatch.value);
+			Cvar_SetValueByRef (&deathmatch, deathmatch.value);
 			break;
 		}
 
@@ -4888,7 +4966,7 @@ void M_AdjustDSliders (int dir)
 		if (snipers == 1)
 			deathmatch.value = deathmatch.value + DM_SNIPERS;
 
-		Cvar_SetValue ("deathmatch", deathmatch.value);
+		Cvar_SetValueByRef (&deathmatch, deathmatch.value);
 		break;
 
 	case 8:	// Exit non fatal
@@ -4913,7 +4991,7 @@ void M_AdjustDSliders (int dir)
 				deathmatch.value = deathmatch.value + DM_RESPAWN - DM_EXIT_NON_FATAL;
 			if (exit_non_fatal == 1)
 				deathmatch.value = deathmatch.value + DM_RESPAWN + DM_EXIT_NON_FATAL;
-			Cvar_SetValue ("deathmatch", deathmatch.value);
+			Cvar_SetValueByRef (&deathmatch, deathmatch.value);
 			break;
 		}
 
@@ -4922,7 +5000,7 @@ void M_AdjustDSliders (int dir)
 		if (exit_non_fatal == 1)
 			deathmatch.value = deathmatch.value + DM_EXIT_NON_FATAL;
 
-		Cvar_SetValue ("deathmatch", deathmatch.value);
+		Cvar_SetValueByRef (&deathmatch, deathmatch.value);
 		break;
 
 	case 9:	// Infinite Ammo
@@ -4947,7 +5025,7 @@ void M_AdjustDSliders (int dir)
 				deathmatch.value = deathmatch.value + DM_RESPAWN - DM_INFINITE_AMMO;
 			if (infinite_ammo == 1)
 				deathmatch.value = deathmatch.value + DM_RESPAWN + DM_INFINITE_AMMO;
-			Cvar_SetValue ("deathmatch", deathmatch.value);
+			Cvar_SetValueByRef (&deathmatch, deathmatch.value);
 			break;
 		}
 
@@ -4956,7 +5034,7 @@ void M_AdjustDSliders (int dir)
 		if (infinite_ammo == 1)
 			deathmatch.value = deathmatch.value + DM_INFINITE_AMMO;
 
-		Cvar_SetValue ("deathmatch", deathmatch.value);
+		Cvar_SetValueByRef (&deathmatch, deathmatch.value);
 		break;
 
 	case 10:	// All weapons
@@ -4981,7 +5059,7 @@ void M_AdjustDSliders (int dir)
 				deathmatch.value = deathmatch.value + DM_RESPAWN - DM_ALL_WEAPONS;
 			if (all_weapons == 1)
 				deathmatch.value = deathmatch.value + DM_RESPAWN + DM_ALL_WEAPONS;
-			Cvar_SetValue ("deathmatch", deathmatch.value);
+			Cvar_SetValueByRef (&deathmatch, deathmatch.value);
 			break;
 		}
 
@@ -4990,7 +5068,7 @@ void M_AdjustDSliders (int dir)
 		if (all_weapons == 1)
 			deathmatch.value = deathmatch.value + DM_ALL_WEAPONS;
 
-		Cvar_SetValue ("deathmatch", deathmatch.value);
+		Cvar_SetValueByRef (&deathmatch, deathmatch.value);
 		break;
 
 	case 11:	// No reloading
@@ -5015,7 +5093,7 @@ void M_AdjustDSliders (int dir)
 				deathmatch.value = deathmatch.value + DM_RESPAWN - DM_NO_RELOAD;
 			if (no_reload == 1)
 				deathmatch.value = deathmatch.value + DM_RESPAWN + DM_NO_RELOAD;
-			Cvar_SetValue ("deathmatch", deathmatch.value);
+			Cvar_SetValueByRef (&deathmatch, deathmatch.value);
 			break;
 		}
 
@@ -5024,7 +5102,7 @@ void M_AdjustDSliders (int dir)
 		if (no_reload == 1)
 			deathmatch.value = deathmatch.value + DM_NO_RELOAD;
 
-		Cvar_SetValue ("deathmatch", deathmatch.value);
+		Cvar_SetValueByRef (&deathmatch, deathmatch.value);
 		break;
 
 	case 12:	// No armor
@@ -5049,7 +5127,7 @@ void M_AdjustDSliders (int dir)
 				deathmatch.value = deathmatch.value + DM_RESPAWN - DM_NO_ARMOR;
 			if (no_armor == 1)
 				deathmatch.value = deathmatch.value + DM_RESPAWN + DM_NO_ARMOR;
-			Cvar_SetValue ("deathmatch", deathmatch.value);
+			Cvar_SetValueByRef (&deathmatch, deathmatch.value);
 			break;
 		}
 
@@ -5058,7 +5136,7 @@ void M_AdjustDSliders (int dir)
 		if (no_armor == 1)
 			deathmatch.value = deathmatch.value + DM_NO_ARMOR;
 
-		Cvar_SetValue ("deathmatch", deathmatch.value);
+		Cvar_SetValueByRef (&deathmatch, deathmatch.value);
 		break;
 
 	case 13:	// No health
@@ -5083,7 +5161,7 @@ void M_AdjustDSliders (int dir)
 				deathmatch.value = deathmatch.value + DM_RESPAWN - DM_NO_HEALTH;
 			if (no_health == 1)
 				deathmatch.value = deathmatch.value + DM_RESPAWN + DM_NO_HEALTH;
-			Cvar_SetValue ("deathmatch", deathmatch.value);
+			Cvar_SetValueByRef (&deathmatch, deathmatch.value);
 			break;
 		}
 
@@ -5092,7 +5170,7 @@ void M_AdjustDSliders (int dir)
 		if (no_health == 1)
 			deathmatch.value = deathmatch.value + DM_NO_HEALTH;
 
-		Cvar_SetValue ("deathmatch", deathmatch.value);
+		Cvar_SetValueByRef (&deathmatch, deathmatch.value);
 		break;
 
 	case 14:	// Armor regen
@@ -5117,7 +5195,7 @@ void M_AdjustDSliders (int dir)
 				deathmatch.value = deathmatch.value + DM_RESPAWN - DM_ARMOR_REGEN;
 			if (armor_regen == 1)
 				deathmatch.value = deathmatch.value + DM_RESPAWN + DM_ARMOR_REGEN;
-			Cvar_SetValue ("deathmatch", deathmatch.value);
+			Cvar_SetValueByRef (&deathmatch, deathmatch.value);
 			break;
 		}
 
@@ -5126,7 +5204,7 @@ void M_AdjustDSliders (int dir)
 		if (armor_regen == 1)
 			deathmatch.value = deathmatch.value + DM_ARMOR_REGEN;
 
-		Cvar_SetValue ("deathmatch", deathmatch.value);
+		Cvar_SetValueByRef (&deathmatch, deathmatch.value);
 		break;
 
 	case 15:	// Health regen
@@ -5151,7 +5229,7 @@ void M_AdjustDSliders (int dir)
 				deathmatch.value = deathmatch.value + DM_RESPAWN - DM_HEALTH_REGEN;
 			if (health_regen == 1)
 				deathmatch.value = deathmatch.value + DM_RESPAWN + DM_HEALTH_REGEN;
-			Cvar_SetValue ("deathmatch", deathmatch.value);
+			Cvar_SetValueByRef (&deathmatch, deathmatch.value);
 			break;
 		}
 
@@ -5160,7 +5238,7 @@ void M_AdjustDSliders (int dir)
 		if (health_regen == 1)
 			deathmatch.value = deathmatch.value + DM_HEALTH_REGEN;
 
-		Cvar_SetValue ("deathmatch", deathmatch.value);
+		Cvar_SetValueByRef (&deathmatch, deathmatch.value);
 		break;
 
 	case 16:	// Safe spawn
@@ -5185,7 +5263,7 @@ void M_AdjustDSliders (int dir)
 				deathmatch.value = deathmatch.value + DM_RESPAWN - DM_SAFE_SPAWN;
 			if (safe_spawn == 1)
 				deathmatch.value = deathmatch.value + DM_RESPAWN + DM_SAFE_SPAWN;
-			Cvar_SetValue ("deathmatch", deathmatch.value);
+			Cvar_SetValueByRef (&deathmatch, deathmatch.value);
 			break;
 		}
 
@@ -5194,7 +5272,7 @@ void M_AdjustDSliders (int dir)
 		if (safe_spawn == 1)
 			deathmatch.value = deathmatch.value + DM_SAFE_SPAWN;
 
-		Cvar_SetValue ("deathmatch", deathmatch.value);
+		Cvar_SetValueByRef (&deathmatch, deathmatch.value);
 		break;
 
 	case 17:	// No bots
@@ -5219,7 +5297,7 @@ void M_AdjustDSliders (int dir)
 				deathmatch.value = deathmatch.value + DM_RESPAWN - DM_NO_BOTS;
 			if (no_bots == 1)
 				deathmatch.value = deathmatch.value + DM_RESPAWN + DM_NO_BOTS;
-			Cvar_SetValue ("deathmatch", deathmatch.value);
+			Cvar_SetValueByRef (&deathmatch, deathmatch.value);
 			break;
 		}
 
@@ -5228,7 +5306,7 @@ void M_AdjustDSliders (int dir)
 		if (no_bots == 1)
 			deathmatch.value = deathmatch.value + DM_NO_BOTS;
 
-		Cvar_SetValue ("deathmatch", deathmatch.value);
+		Cvar_SetValueByRef (&deathmatch, deathmatch.value);
 		break;
 	}
 }
@@ -5382,7 +5460,7 @@ double		searchCompleteTime;
 void M_Menu_Search_f (void)
 {
 	key_dest = key_menu;
-	m_state = m_search;
+	menu_state = m_search;
 	m_entersound = false;
 	slistSilent = true;
 	slistLocal = false;
@@ -5452,7 +5530,7 @@ qboolean slist_sorted;
 void M_Menu_ServerList_f (void)
 {
 	key_dest = key_menu;
-	m_state = m_slist;
+	menu_state = m_slist;
 	m_entersound = true;
 	slist_cursor = 0;
 	m_return_onerror = false;
@@ -5477,9 +5555,9 @@ void M_ServerList_Draw (void)
 				for (j = i+1; j < hostCacheCount; j++)
 					if (strcmp(hostcache[j].name, hostcache[i].name) < 0)
 					{
-						Q_memcpy(&temp, &hostcache[j], sizeof(hostcache_t));
-						Q_memcpy(&hostcache[j], &hostcache[i], sizeof(hostcache_t));
-						Q_memcpy(&hostcache[i], &temp, sizeof(hostcache_t));
+						memcpy(&temp, &hostcache[j], sizeof(hostcache_t));
+						memcpy(&hostcache[j], &hostcache[i], sizeof(hostcache_t));
+						memcpy(&hostcache[i], &temp, sizeof(hostcache_t));
 					}
 		}
 		slist_sorted = true;
@@ -5495,9 +5573,9 @@ void M_ServerList_Draw (void)
 	for (n = 0; n < hostCacheCount; n++)
 	{
 		if (hostcache[n].maxusers)
-			sprintf(string, "%-15.15s %-15.15s %2u/%2u\n", hostcache[n].name, hostcache[n].map, hostcache[n].users, hostcache[n].maxusers);
+			snprintf(string, sizeof(string), "%-15.15s %-15.15s %2u/%2u\n", hostcache[n].name, hostcache[n].map, hostcache[n].users, hostcache[n].maxusers);
 		else
-			sprintf(string, "%-15.15s %-15.15s\n", hostcache[n].name, hostcache[n].map);
+			snprintf(string, sizeof(string), "%-15.15s %-15.15s\n", hostcache[n].name, hostcache[n].map);
 		M_Print (16, 32 + 8*n, string);
 	}
 
@@ -5506,9 +5584,9 @@ void M_ServerList_Draw (void)
 }
 
 
-void M_ServerList_Key (int k)
+void M_ServerList_Key (int key)
 {
-	switch (k)
+	switch (key)
 	{
 	case K_ESCAPE:
 		M_Menu_LanConfig_f ();
@@ -5536,11 +5614,11 @@ void M_ServerList_Key (int k)
 
 	case K_ENTER:
 		S_LocalSound ("misc/menu2.wav");
-		m_return_state = m_state;
+		m_return_state = menu_state;
 		m_return_onerror = true;
 		slist_sorted = false;
 		key_dest = key_game;
-		m_state = m_none;
+		menu_state = m_none;
 
 			// If we were in a multiplayer game, reset all the deathmatch flags to 0;
 
@@ -5598,7 +5676,7 @@ void M_Init (void)
 
 void M_Draw (void)
 {
-	if (m_state == m_none || key_dest != key_menu)
+	if (menu_state == m_none || key_dest != key_menu)
 		return;
 
 	if (!m_recursiveDraw)
@@ -5614,9 +5692,11 @@ void M_Draw (void)
 		}
 		else
 		{
+#ifdef SUPPORTS_KUROK
             if (kurok)
                 Draw_FadeScreen2 ();
             else
+#endif
 			    Draw_FadeScreen ();
         }
 		scr_fullupdate = 0;
@@ -5626,7 +5706,7 @@ void M_Draw (void)
 		m_recursiveDraw = false;
 	}
 
-	switch (m_state)
+	switch (menu_state)
 	{
 	case m_none:
 		break;
@@ -5726,7 +5806,7 @@ void M_Draw (void)
 
 void M_Keydown (int key)
 {
-	switch (m_state)
+	switch (menu_state)
 	{
 	case m_none:
 		return;

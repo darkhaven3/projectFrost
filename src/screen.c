@@ -233,8 +233,8 @@ static void SCR_CalcRefdef (void)
 // bound viewsize
 	if (scr_viewsize.value < 30)
 		Cvar_Set ("viewsize","30");
-	if (scr_viewsize.value > 130)
-		Cvar_Set ("viewsize","130");
+	if (scr_viewsize.value > 120)
+		Cvar_Set ("viewsize","120");
 
 // bound field of view
 	if (scr_fov.value < 10)
@@ -247,13 +247,13 @@ static void SCR_CalcRefdef (void)
 
 // intermission is always full screen	
 	if (cl.intermission)
-		size = 130;
+		size = 120;
 	else
 		size = scr_viewsize.value;
 
-	if (size >= 130)
+	if (size >= 120)
 		sb_lines = 0;		// no status bar at all
-	else if (size >= 120)
+	else if (size >= 110)
 		sb_lines = 24;		// no inventory
 	else
 		sb_lines = 24+16+8;

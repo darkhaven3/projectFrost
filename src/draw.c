@@ -867,17 +867,6 @@ void Draw_FadeScreen (void)
 	VID_LockBuffer ();
 }
 
-/*
-================
-Draw_FadeScreen2
-
-================
-*/
-void Draw_FadeScreen2 (void)
-{
-    Draw_FadeScreen();
-}
-
 //=============================================================================
 
 /*
