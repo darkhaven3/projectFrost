@@ -10,7 +10,8 @@ MP3LIB          = MP3HARDWARE
 #MODEL_N=-DNORMAL_MODEL
 MODEL_S=-DSLIM_MODEL
 
-PSP_FW_VERSION=660
+#  FW 5.00+ can play; anything lower should be avoided for compatibility reasons as much has changed since
+PSP_FW_VERSION=500
 
 # If GPROF is used it builds an ELF, hence the EBOOT needs to be in GAME150
 #USE_GPROF		= 1
@@ -26,19 +27,19 @@ endif
 PSPLIBSDIR		= $(PSPSDK)/..
 
 # Project specific variables.
-VERSION		= 4.71 Rev4 64MB
+VERSION		= 1.00 Beta
 SRC_DIR		= ..
 OBJ_DIR		= normal
 TARGET		= $(OBJ_DIR)/Quake
 PSP_LARGE_MEMORY = 1
-PSP_EBOOT_TITLE	= Insomnia ProQuake $(VERSION)
+PSP_EBOOT_TITLE	= Project Fury $(VERSION)
 PSP_EBOOT_ICON	= pics/icon.png
 PSP_EBOOT_PIC1	= pics/pic1.png
 PSP_EBOOT_SFO	= $(OBJ_DIR)/PARAM.SFO
 PSP_EBOOT	= $(OBJ_DIR)/EBOOT.PBP
 DIST_DIR	= dist
 DIST_FILES	= readme.html gpl.txt Quake/EBOOT.PBP
-ZIP_FILE	= Insomnia_v$(VERSION).zip
+ZIP_FILE	= Fury_v$(VERSION).zip
 
 #ifeq ($(USE_GPROF),1)
 #GPROF_OBJS		= $(OBJ_DIR)/psp/prof.o $(OBJ_DIR)/psp/mcount.o
