@@ -118,7 +118,7 @@ qboolean VCR_CanSendMessage (qsocket_t *sock)
 	qboolean	ret;
 
 	if (host_time != next.time || next.op != VCR_OP_CANSENDMESSAGE || next.session != *(long *)(&sock->driverdata))
-		Sys_Error ("VCR missmatch");
+		Sys_Error ("VCR mismatch");
 
 	Sys_FileRead(vcrFile, &ret, sizeof(int));
 

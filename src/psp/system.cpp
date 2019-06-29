@@ -9,7 +9,7 @@ of the License, or (at your option) any later version.
 
 This program is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 
 See the GNU General Public License for more details.
 
@@ -37,20 +37,16 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <pspkernel.h>
 #include <psppower.h>
 #include <psprtc.h>
-#include <psputility.h>
-#include <pspdisplay.h>
-#include <pspgu.h>
-#include <pspgum.h>
 
 extern "C"
 {
 #include "../sys.h"
 #include "../quakedef.h"
-void Host_WriteConfiguration (void);
 }
-#include "fnmatch.h"
+#include "fs_fnmatch.h"
 
 void CDAudio_Stop(void);
+void CDAudio_Update(void);
 
 namespace quake
 {
@@ -83,7 +79,12 @@ namespace quake
 		void suspend()
 		{
 			Con_Printf("Suspend requested \n");
-			CDAudio_Pause();
+
+                Cvar_SetStringByRef (&bgmtype,"none");
+                CDAudio_Update();
+                sceKernelDelayThread(5*10000);
+
+//			CDAudio_Pause();
 			// Close each file.
 			for (std::size_t file_index = 0; file_index < file_count; ++file_index)
 			{
@@ -99,8 +100,8 @@ namespace quake
 					file.handle = 0;
 				}
 			}
-			
-			Con_Printf("Filesystem sunspended\n");
+
+			Con_Printf("Filesystem suspended\n");
 		}
 
 		void resume()
@@ -128,17 +129,28 @@ namespace quake
 					}
 				}
 			}
+
+            Con_Printf("CD Audio Initialized\n");
+            if(kurok)
+            {
+                Cvar_SetStringByRef (&bgmtype, "cd");
+                CDAudio_Update();
+            }
+			else
+			{
+			    Cvar_SetStringByRef (&bgmtype, "cd");
+                CDAudio_Update();
+			}
 			
-			CDAudio_Resume();
+//			CDAudio_Resume();
 			Con_Printf("Filesystem resumed\n");
-			
+
 		}
 	}
 }
 
 using namespace quake;
 using namespace quake::system;
-
 
 int Sys_FileOpenRead (char *path, int *hndl)
 {
@@ -172,7 +184,7 @@ int Sys_FileOpenRead (char *path, int *hndl)
 		}
 
 		// The file is now in use!
-		Q_strncpy(file.name, path, MAX_OSPATH);
+		strncpy(file.name, path, MAX_OSPATH);
 		file.write = false;
 
 		// Done.
@@ -204,7 +216,7 @@ int Sys_FileOpenWrite (char *path)
 		}
 
 		// The file is now in use!
-		Q_strncpy(file.name, path, MAX_OSPATH);
+		strncpy(file.name, path, MAX_OSPATH);
 		file.write = true;
 
 		// Done.
@@ -239,6 +251,12 @@ int Sys_FileRead (int handle, void *dest, int count)
 	return fread(dest, 1, count, file.handle);
 }
 
+int Sys_FileFread (void *dest, int start, int count, int handle)
+{
+	file& file = files[handle];
+	return fread(dest, start, count, file.handle);
+}
+
 int Sys_FileWrite (int handle, void *data, int count)
 {
 	file& file = files[handle];
@@ -266,41 +284,17 @@ int	Sys_FileTime (char *path)
 	*/
 }
 
-
 void Sys_mkdir (char *path)
 {
 	Sys_Printf("Mkdir: %s\n", path);
 	sceIoMkdir(path, 0x777);
 }
-#if 0 //bad
-//Crow_bar.
-void Sys_Error (char *error, ...)
-{
-	char msg[MAX_OSPATH];
-	// Clear the sound buffer.
-	S_ClearBuffer();
-
-	// Put the error message in a buffer.
-	va_list args;
-	va_start(args, error);
-	char buffer[1024];
-	memset(buffer, 0, sizeof(buffer));
-	vsnprintf(buffer, sizeof(buffer) - 1, error, args);
-	va_end(args);
-
-	sprintf(msg,"        SYSTEM ERROR       \n\n%s ",buffer);
-
-	ShowMessageDialog(msg, 0);
-
-	Sys_Quit();
-}
-#endif
 
 void Sys_Error (char *error, ...)
 {
 	// Clear the sound buffer.
 	S_ClearBuffer();
-	
+
 	// Put the error message in a buffer.
 	va_list args;
 	va_start(args, error);
@@ -316,38 +310,30 @@ void Sys_Error (char *error, ...)
 		pspDebugScreenInit();
 		debugScreenInitialized = true;
 	}
-
-	pspDebugScreenSetTextColor(0x0000af);
-	pspDebugScreenPrintf("PSP DQuake v:%4.2f \n",(float)VERSION);
-	pspDebugScreenSetTextColor(0x10ffae);
+	pspDebugScreenSetTextColor(0xffffff);
 	pspDebugScreenPrintf("The following error occurred:\n");
-	pspDebugScreenSetTextColor(0x00ffff);
+	pspDebugScreenSetTextColor(0x0000ff);
 	pspDebugScreenPrintData(buffer, strlen(buffer));
-	pspDebugScreenSetTextColor(0x40ff00);
+	pspDebugScreenSetTextColor(0xffffff);
 	pspDebugScreenPrintf("\n\nPress CROSS to quit.\n");
 
 	// Wait for a button press.
 	sceCtrlSetSamplingCycle(0);
 	sceCtrlSetSamplingMode(PSP_CTRL_MODE_ANALOG);
 	SceCtrlData pad;
-	do
-	{
+	do {
 		sceCtrlReadBufferPositive(&pad, 1);
 	} while (pad.Buttons & PSP_CTRL_CROSS);
-	do
-	{
+	do {
 		sceCtrlReadBufferPositive(&pad, 1);
 	} while ((pad.Buttons & PSP_CTRL_CROSS) == 0);
-	do
-	{
+	do {
 		sceCtrlReadBufferPositive(&pad, 1);
 	} while (pad.Buttons & PSP_CTRL_CROSS);
 
 	// Quit.
 	pspDebugScreenPrintf("Shutting down...\n");
-
 	Sys_Quit();
-
 }
 
 void Sys_Printf (char *fmt, ...)
@@ -370,8 +356,6 @@ void Sys_Printf (char *fmt, ...)
 #endif
 }
 
-void ShutdownExtModules (void);
-
 void Sys_Quit (void)
 {
 	// Shut down the host system.
@@ -379,10 +363,7 @@ void Sys_Quit (void)
 	{
 		Host_Shutdown();
 	}
-#if 0
-	// Remove modules from ram
-    ShutdownExtModules ();
-#endif
+
 	// Restore the old clock frequency.
 	scePowerSetClockFrequency(main::cpuClockSpeed, main::ramClockSpeed, main::busClockSpeed);
 
@@ -393,7 +374,7 @@ void Sys_Quit (void)
 	sceKernelExitGame();
 }
 
-double Sys_FloatTime (void)
+double Sys_DoubleTime (void)
 {
 	u64 ticks;
 	sceRtcGetCurrentTick(&ticks);
@@ -446,13 +427,13 @@ char *Sys_FindFirstFile (char *path, char *pattern)
 		return NULL;
 
 	tmp_len = strlen (pattern);
-	findpattern = (char*) malloc (tmp_len + 1);
+	findpattern = (char*) Q_malloc (tmp_len + 1);
 	if (!findpattern)
 		return NULL;
 	strcpy (findpattern, pattern);
 	findpattern[tmp_len] = '\0';
 	tmp_len = strlen (path);
-	findpath = (char*) malloc (tmp_len + 1);
+	findpath = (char*) Q_malloc (tmp_len + 1);
 	if (!findpath)
 		return NULL;
 	strcpy (findpath, path);

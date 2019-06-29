@@ -8,7 +8,7 @@ of the License, or (at your option) any later version.
 
 This program is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 
 See the GNU General Public License for more details.
 
@@ -29,7 +29,9 @@ int			net_numsockets = 0;
 qboolean	serialAvailable = false;
 qboolean	ipxAvailable = false;
 qboolean	tcpipAvailable = false;
+#ifdef PSP_NETWORKING_CODE
 qboolean	tcpipAdhoc = false;
+#endif
 
 int			net_hostport;
 int			DEFAULTnet_hostport = 26000;
@@ -65,7 +67,20 @@ int unreliableMessagesSent = 0;
 int unreliableMessagesReceived = 0;
 
 cvar_t	net_messagetimeout = {"net_messagetimeout","300"};
-cvar_t	hostname = {"hostname", "Unnamed Server"};
+cvar_t	net_connecttimeout = {"net_connecttimeout","10"};	// JPG 2.01 - qkick/qflood protection
+cvar_t	hostname = {"hostname", "UNNAMED"};
+#ifdef PROQUAKE_EXTENSION
+cvar_t	pq_password = {"pq_password", ""};					// JPG 3.00 - password protection
+#endif
+cvar_t	rcon_password = {"rcon_password", ""};				// JPG 3.00 - rcon password
+cvar_t	rcon_server = {"rcon_server", ""};					// JPG 3.00 - rcon server
+char	server_name[MAX_QPATH];								// JPG 3.50 - use the current server if rcon_server is not set
+
+// JPG 3.00 - rcon
+#define RCON_BUFF_SIZE	8192
+char		rcon_buff[RCON_BUFF_SIZE];
+sizebuf_t	rcon_message = {false, false, rcon_buff, RCON_BUFF_SIZE, 0};
+qboolean	rcon_active = false;
 
 qboolean	configRestored = false;
 cvar_t	config_com_port = {"_config_com_port", "0x3f8", true};
@@ -95,10 +110,25 @@ double			net_time;
 
 double SetNetTime(void)
 {
-	net_time = Sys_FloatTime();
+	net_time = Sys_DoubleTime();
 	return net_time;
 }
 
+#ifdef PROQUAKE_EXTENSION
+// JPG 3.00 - need this for linux build
+#ifndef _WIN32
+unsigned _lrotl (unsigned x, int s)
+{
+	s &= 31;
+	return (x << s) | (x >> (32 - s));
+}
+unsigned _lrotr (unsigned x, int s)
+{
+	s &= 31;
+	return (x >> s) | (x << (32 - s));
+}
+#endif
+#endif
 
 /*
 ===================
@@ -128,7 +158,7 @@ qsocket_t *NET_NewQSocket (void)
 
 	sock->disconnected = false;
 	sock->connecttime = net_time;
-	Q_strcpy (sock->address,"UNSET ADDRESS");
+	strcpy (sock->address,"UNSET ADDRESS");
 	sock->driver = net_driverlevel;
 	sock->socket = 0;
 	sock->driverdata = NULL;
@@ -181,7 +211,7 @@ static void NET_Listen_f (void)
 		return;
 	}
 
-	listening = Q_atoi(Cmd_Argv(1)) ? true : false;
+	listening = atoi(Cmd_Argv(1)) ? true : false;
 
 	for (net_driverlevel=0 ; net_driverlevel<net_numdrivers; net_driverlevel++)
 	{
@@ -208,7 +238,7 @@ static void MaxPlayers_f (void)
 		return;
 	}
 
-	n = Q_atoi(Cmd_Argv(1));
+	n = atoi(Cmd_Argv(1));
 	if (n < 1)
 		n = 1;
 	if (n > svs.maxclientslimit)
@@ -226,15 +256,22 @@ static void MaxPlayers_f (void)
 	svs.maxclients = n;
 	if (n == 1)
 	{
-		Cvar_Set ("deathmatch", "0");
-		Cvar_Set ("coop", "0");
+		Cvar_SetValueByRef (&deathmatch, 0);
+#ifdef SUPPORTS_KUROK
+		Cvar_SetValueByRef (&coop, 0);
+#endif
 	}
 	else
 	{
+#ifdef SUPPORTS_KUROK
 		if (coop.value)
-			Cvar_Set ("deathmatch", "0");
+			Cvar_SetValueByRef (&deathmatch, 0);
 		else
-			Cvar_Set ("deathmatch", "1");
+            if (deathmatch.value > 1)
+                Cvar_SetValueByRef (&deathmatch, deathmatch.value);
+            else
+#endif
+                Cvar_SetValueByRef (&deathmatch, 1);
 	}
 }
 
@@ -249,7 +286,7 @@ static void NET_Port_f (void)
 		return;
 	}
 
-	n = Q_atoi(Cmd_Argv(1));
+	n = atoi(Cmd_Argv(1));
 	if (n < 1 || n > 65534)
 	{
 		Con_Printf ("Bad value, must be between 1 and 65534\n");
@@ -307,12 +344,17 @@ void NET_Slist_f (void)
 
 	if (! slistSilent)
 	{
-		Con_Printf("Looking for Quake servers...\n");
+#ifdef SUPPORTS_KUROK
+        if (kurok)
+		    Con_Printf("Looking for Kurok servers...\n");
+		else
+#endif
+		    Con_Printf("Looking for Quake servers...\n");
 		PrintSlistHeader();
 	}
 
 	slistInProgress = true;
-	slistStartTime = Sys_FloatTime();
+	slistStartTime = Sys_DoubleTime();
 
 	SchedulePollProcedure(&slistSendProcedure, 0.0);
 	SchedulePollProcedure(&slistPollProcedure, 0.1);
@@ -332,7 +374,7 @@ static void Slist_Send(void)
 		dfunc.SearchForHosts (true);
 	}
 
-	if ((Sys_FloatTime() - slistStartTime) < 0.5)
+	if ((Sys_DoubleTime() - slistStartTime) < 0.5)
 		SchedulePollProcedure(&slistSendProcedure, 0.75);
 }
 
@@ -351,7 +393,7 @@ static void Slist_Poll(void)
 	if (! slistSilent)
 		PrintSlist();
 
-	if ((Sys_FloatTime() - slistStartTime) < 1.5)
+	if ((Sys_DoubleTime() - slistStartTime) < 1.5)
 	{
 		SchedulePollProcedure(&slistPollProcedure, 0.1);
 		return;
@@ -377,8 +419,7 @@ hostcache_t hostcache[HOSTCACHESIZE];
 qsocket_t *NET_Connect (char *host)
 {
 	qsocket_t		*ret;
-	int				n;
-	int				numdrivers = net_numdrivers;
+	int				n, numdrivers = net_numdrivers;
 
 	SetNetTime();
 
@@ -387,7 +428,7 @@ qsocket_t *NET_Connect (char *host)
 
 	if (host)
 	{
-		if (Q_strcasecmp (host, "local") == 0)
+		if (strcasecmp (host, "local") == 0)
 		{
 			numdrivers = 1;
 			goto JustDoIt;
@@ -396,7 +437,7 @@ qsocket_t *NET_Connect (char *host)
 		if (hostCacheCount)
 		{
 			for (n = 0; n < hostCacheCount; n++)
-				if (Q_strcasecmp (host, hostcache[n].name) == 0)
+				if (strcasecmp (host, hostcache[n].name) == 0)
 				{
 					host = hostcache[n].cname;
 					break;
@@ -422,7 +463,7 @@ qsocket_t *NET_Connect (char *host)
 
 	if (hostCacheCount)
 		for (n = 0; n < hostCacheCount; n++)
-			if (Q_strcasecmp (host, hostcache[n].name) == 0)
+			if (strcasecmp (host, hostcache[n].name) == 0)
 			{
 				host = hostcache[n].cname;
 				break;
@@ -434,10 +475,15 @@ JustDoIt:
 		if (net_drivers[net_driverlevel].initialized == false)
 			continue;
 		ret = dfunc.Connect (host);
+#ifdef SUPPORTS_CHEATFREE_MODE
+		if (!sv.active && pq_cheatfree)
+			Security_SetSeed(_lrotr(net_seed, 17), argv[0]);
+#endif
 		if (ret)
 			return ret;
 	}
 
+	/* JPG 3.20 - this has always annoyed me so I commented it out
 	if (host)
 	{
 		Con_Printf("\n");
@@ -445,7 +491,8 @@ JustDoIt:
 		PrintSlist();
 		PrintSlistTrailer();
 	}
-	
+	*/
+
 	return NULL;
 }
 
@@ -486,10 +533,11 @@ qsocket_t *NET_CheckNewConnections (void)
 				Sys_FileWrite (vcrFile, &vcrConnect, sizeof(vcrConnect));
 				Sys_FileWrite (vcrFile, ret->address, NET_NAMELEN);
 			}
+
 			return ret;
 		}
 	}
-	
+
 	if (recording)
 	{
 		vcrConnect.time = host_time;
@@ -571,11 +619,27 @@ int	NET_GetMessage (qsocket_t *sock)
 			NET_Close(sock);
 			return -1;
 		}
-	}
 
+		// JPG 2.01 - qflood/qkick protection
+		if (net_time - sock->lastMessageTime > net_connecttimeout.value && sv.active &&
+			host_client && sock == host_client->netconnection && !strcmp(host_client->name, "unconnected"))
+		{
+			NET_Close(sock);
+			return -1;
+		}
+	}
 
 	if (ret > 0)
 	{
+#ifdef PROQUAKE_EXTENSION
+		// JPG 3.20 - cheat free
+		if (pq_cheatfree && sock->mod != MOD_QSMACK && (sock->mod_version < 35 || sock->encrypt))
+		{
+			// Con_Printf("NET_Decrypt\n");
+			Security_Decode(net_message.data, net_message.data, net_message.cursize, sock->client_port);
+		}
+#endif
+
 		if (sock->driver)
 		{
 			sock->lastMessageTime = net_time;
@@ -631,10 +695,16 @@ struct
 	int		r;
 } vcrSendMessage;
 
+#ifdef PROQUAKE_EXTENSION
+// JPG 3.20 - cheat free
+byte buff[NET_MAXMESSAGE];
+sizebuf_t newdata;
+#endif
+
 int NET_SendMessage (qsocket_t *sock, sizebuf_t *data)
 {
 	int		r;
-	
+
 	if (!sock)
 		return -1;
 
@@ -643,6 +713,24 @@ int NET_SendMessage (qsocket_t *sock, sizebuf_t *data)
 		Con_Printf("NET_SendMessage: disconnected socket\n");
 		return -1;
 	}
+#ifdef PROQUAKE_EXTENSION
+	// JPG 3.20 - cheat free
+	if (pq_cheatfree && sock->mod != MOD_QSMACK)
+	{
+		if (sock->mod_version < 35 || sock->encrypt == 1 || sock->encrypt == 2)	// JPG 3.50
+		{
+			// Con_Printf("NET_Encrypt\n");
+			Security_Encode(data->data, buff, data->cursize, sock->client_port);
+			newdata.data = buff;
+			newdata.cursize = data->cursize;
+			data = &newdata;
+		}
+		if (sock->encrypt == 1)
+			sock->encrypt = 0;
+		else if (sock->encrypt == 3)
+			sock->encrypt = 2;
+	}
+#endif
 
 	SetNetTime();
 	r = sfunc.QSendMessage(sock, data);
@@ -657,7 +745,7 @@ int NET_SendMessage (qsocket_t *sock, sizebuf_t *data)
 		vcrSendMessage.r = r;
 		Sys_FileWrite (vcrFile, &vcrSendMessage, 20);
 	}
-	
+
 	return r;
 }
 
@@ -665,7 +753,7 @@ int NET_SendMessage (qsocket_t *sock, sizebuf_t *data)
 int NET_SendUnreliableMessage (qsocket_t *sock, sizebuf_t *data)
 {
 	int		r;
-	
+
 	if (!sock)
 		return -1;
 
@@ -674,6 +762,24 @@ int NET_SendUnreliableMessage (qsocket_t *sock, sizebuf_t *data)
 		Con_Printf("NET_SendMessage: disconnected socket\n");
 		return -1;
 	}
+#ifdef PROQUAKE_EXTENSION
+	// JPG 3.20 - cheat free
+	if (pq_cheatfree && sock->mod != MOD_QSMACK)
+	{
+		if (sock->mod_version < 35 || sock->encrypt == 1 || sock->encrypt == 2)	// JPG 3.50
+		{
+			// Con_Printf("NET_EncryptUnreliable\n");
+			Security_Encode(data->data, buff, data->cursize, sock->client_port);
+			newdata.data = buff;
+			newdata.cursize = data->cursize;
+			data = &newdata;
+		}
+		if (sock->encrypt == 1)
+			sock->encrypt = 0;
+		else if (sock->encrypt == 3)
+			sock->encrypt = 2;
+	}
+#endif
 
 	SetNetTime();
 	r = sfunc.SendUnreliableMessage(sock, data);
@@ -688,7 +794,7 @@ int NET_SendUnreliableMessage (qsocket_t *sock, sizebuf_t *data)
 		vcrSendMessage.r = r;
 		Sys_FileWrite (vcrFile, &vcrSendMessage, 20);
 	}
-	
+
 	return r;
 }
 
@@ -704,7 +810,7 @@ message to be transmitted.
 qboolean NET_CanSendMessage (qsocket_t *sock)
 {
 	int		r;
-	
+
 	if (!sock)
 		return false;
 
@@ -714,7 +820,7 @@ qboolean NET_CanSendMessage (qsocket_t *sock)
 	SetNetTime();
 
 	r = sfunc.CanSendMessage(sock);
-	
+
 	if (recording)
 	{
 		vcrSendMessage.time = host_time;
@@ -723,7 +829,7 @@ qboolean NET_CanSendMessage (qsocket_t *sock)
 		vcrSendMessage.r = r;
 		Sys_FileWrite (vcrFile, &vcrSendMessage, 20);
 	}
-	
+
 	return r;
 }
 
@@ -731,8 +837,7 @@ qboolean NET_CanSendMessage (qsocket_t *sock)
 int NET_SendToAll(sizebuf_t *data, int blocktime)
 {
 	double		start;
-	int			i;
-	int			count = 0;
+	int		i, count = 0;
 	qboolean	state1 [MAX_SCOREBOARD];
 	qboolean	state2 [MAX_SCOREBOARD];
 
@@ -760,7 +865,7 @@ int NET_SendToAll(sizebuf_t *data, int blocktime)
 		}
 	}
 
-	start = Sys_FloatTime();
+	start = Sys_DoubleTime();
 	while (count)
 	{
 		count = 0;
@@ -784,18 +889,15 @@ int NET_SendToAll(sizebuf_t *data, int blocktime)
 			if (! state2[i])
 			{
 				if (NET_CanSendMessage (host_client->netconnection))
-				{
 					state2[i] = true;
-				}
 				else
-				{
 					NET_GetMessage (host_client->netconnection);
-				}
+
 				count++;
 				continue;
 			}
 		}
-		if ((Sys_FloatTime() - start) > blocktime)
+		if ((Sys_DoubleTime() - start) > blocktime)
 			break;
 	}
 	return count;
@@ -812,8 +914,7 @@ NET_Init
 
 void NET_Init (void)
 {
-	int			i;
-	int			controlSocket;
+	int		i, controlSocket;
 	qsocket_t	*s;
 
 	if (COM_CheckParm("-playback"))
@@ -834,7 +935,7 @@ void NET_Init (void)
 	if (i)
 	{
 		if (i < com_argc-1)
-			DEFAULTnet_hostport = Q_atoi (com_argv[i+1]);
+			DEFAULTnet_hostport = atoi (com_argv[i+1]);
 		else
 			Sys_Error ("NET_Init: you must specify a number after -port");
 	}
@@ -859,21 +960,26 @@ void NET_Init (void)
 	// allocate space for network message buffer
 	SZ_Alloc (&net_message, NET_MAXMESSAGE);
 
-	Cvar_RegisterVariable (&net_messagetimeout);
-	Cvar_RegisterVariable (&hostname);
-	Cvar_RegisterVariable (&config_com_port);
-	Cvar_RegisterVariable (&config_com_irq);
-	Cvar_RegisterVariable (&config_com_baud);
-	Cvar_RegisterVariable (&config_com_modem);
-	Cvar_RegisterVariable (&config_modem_dialtype);
-	Cvar_RegisterVariable (&config_modem_clear);
-	Cvar_RegisterVariable (&config_modem_init);
-	Cvar_RegisterVariable (&config_modem_hangup);
-#ifdef IDGODS
-	Cvar_RegisterVariable (&idgods);
+	Cvar_RegisterVariable (&net_messagetimeout, NULL);
+	Cvar_RegisterVariable (&net_connecttimeout, NULL);	// JPG 2.01 - qkick/qflood protection
+	Cvar_RegisterVariable (&hostname, NULL);
+#ifdef PROQUAKE_EXTENSION
+	Cvar_RegisterVariable (&pq_password, NULL);			// JPG 3.00 - password protection
 #endif
+	Cvar_RegisterVariable (&rcon_password, NULL);			// JPG 3.00 - rcon password
+	Cvar_RegisterVariable (&rcon_server, NULL);			// JPG 3.00 - rcon server
+	Cvar_RegisterVariable (&config_com_port, NULL);
+	Cvar_RegisterVariable (&config_com_irq, NULL);
+	Cvar_RegisterVariable (&config_com_baud, NULL);
+	Cvar_RegisterVariable (&config_com_modem, NULL);
+	Cvar_RegisterVariable (&config_modem_dialtype, NULL);
+	Cvar_RegisterVariable (&config_modem_clear, NULL);
+	Cvar_RegisterVariable (&config_modem_init, NULL);
+	Cvar_RegisterVariable (&config_modem_hangup, NULL);
 
+#ifdef PSP_NETWORKING_CODE
 	if(!host_initialized)
+#endif
 	{
 		Cmd_AddCommand ("slist", NET_Slist_f);
 		Cmd_AddCommand ("listen", NET_Listen_f);
@@ -897,6 +1003,22 @@ void NET_Init (void)
 		Con_DPrintf("IPX address %s\n", my_ipx_address);
 	if (*my_tcpip_address)
 		Con_DPrintf("TCP/IP address %s\n", my_tcpip_address);
+#ifdef PROQUAKE_EXTENSION
+			// JPG 3.20 - cheat free
+	if (pq_cheatfreeEnabled)
+	{
+		net_seed = rand() ^ (rand() << 10) ^ (rand() << 20);
+		net_seed &= 0x7fffffff;
+		if (net_seed == 0x7fffffff)
+			net_seed = 0;
+		net_seed |= 1;
+		if (net_seed <= 1)
+			net_seed = 0x34719;
+#ifdef SUPPORTS_CHEATFREE_MODE
+		Security_SetSeed(net_seed, argv[0]);
+#endif
+	}
+#endif
 }
 
 /*
@@ -914,9 +1036,7 @@ void		NET_Shutdown (void)
 	for (sock = net_activeSockets; sock; sock = sock->next)
 		NET_Close(sock);
 
-//
 // shutdown the drivers
-//
 	for (net_driverlevel = 0; net_driverlevel < net_numdrivers; net_driverlevel++)
 	{
 		if (net_drivers[net_driverlevel].initialized == true)
@@ -945,7 +1065,7 @@ void NET_Poll(void)
 	{
 		if (serialAvailable)
 		{
-			if (config_com_modem.value == 1.0)
+			if (config_com_modem.value != 0) // Baker 3.99: changed from == 1.0 to != 0
 				useModem = true;
 			else
 				useModem = false;
@@ -971,7 +1091,7 @@ void SchedulePollProcedure(PollProcedure *proc, double timeOffset)
 {
 	PollProcedure *pp, *prev;
 
-	proc->nextTime = Sys_FloatTime() + timeOffset;
+	proc->nextTime = Sys_DoubleTime() + timeOffset;
 	for (pp = pollProcedureList, prev = NULL; pp; pp = pp->next)
 	{
 		if (pp->nextTime >= proc->nextTime)

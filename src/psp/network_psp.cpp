@@ -9,7 +9,7 @@ of the License, or (at your option) any later version.
 
 This program is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 
 See the GNU General Public License for more details.
 
@@ -19,7 +19,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 */
 
-//#include <psputility_netmodules.h>
+#include <psputility_netmodules.h>
 #include <pspkernel.h>
 #include <psputility.h>
 #include <pspnet.h>
@@ -38,7 +38,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <unistd.h>
 #include <netdb.h>
 
-#include <gethost.hpp>
+#include <network_gethost.hpp>
 
 #include <pspsdk.h>
 
@@ -53,6 +53,21 @@ int totalAccessPoints = 0;
 cvar_t accesspoint = {"accesspoint", "1", qtrue};
 int accessPointNumber[100];
 
+static __inline__ unsigned int sceAllegrexWsbw(unsigned int x) {
+    return (((x & 0xFF)<<24) | ((x & 0xFF00)<<8) | ((x>>8) & 0xFF00) | ((x>>24) & 0xFF));
+}
+
+static __inline__ unsigned int sceAllegrexWsbh(unsigned int x) {
+    return (((x<<8) & 0xFF00FF00) | ((x>>8) & 0x00FF00FF));
+}
+
+static inline u32 htonl(u32 hostlong) {
+    return sceAllegrexWsbw(hostlong);
+}
+
+static inline u16 htons(u16 hostshort) {
+    return sceAllegrexWsbh(hostshort);
+}
 
 typedef struct sockaddr_adhoc
 {
@@ -107,12 +122,12 @@ namespace quake
 						}
 					}
 					if(accesspoint.value > totalAccessPoints)
-						Cvar_SetValue("accesspoint", 1);
+						Cvar_SetValueByRef (&accesspoint, 1);
 				}
 
 				if(!host_initialized)
 				{
-					Cvar_RegisterVariable(&accesspoint);
+					Cvar_RegisterVariable(&accesspoint, NULL);
 				}
 
 				if(!tcpipAvailable)
@@ -151,8 +166,7 @@ namespace quake
 				}
 
 				// connected, get my IPADDR and run test
-				if (sceNetApctlGetInfo(8, (SceNetApctlInfo*)szMyIPAddr) != 0)
-					strcpy(szMyIPAddr, "unknown IP address");
+				if (sceNetApctlGetInfo(8, (union SceNetApctlInfo*)szMyIPAddr) != 0) // determine my name & address
 
 				// determine my name & address
 				gethostname(buff, MAXHOSTNAMELEN);
@@ -160,10 +174,10 @@ namespace quake
 				my_addr = inet_addr(szMyIPAddr);
 
 				// if the quake hostname isn't set, set it to the machine name
-				if (Q_strcmp(hostname.string, "UNNAMED") == 0)
+				if (strcmp(hostname.string, "UNNAMED") == 0)
 				{
 					buff[15] = 0;
-					Cvar_Set ("hostname", buff);
+					Cvar_SetStringByRef (&hostname, buff);
 				}
 
 				if ((control_socket = open_socket(0)) == -1)
@@ -179,8 +193,8 @@ namespace quake
 				((struct sockaddr_in *)&broadcast_addr)->sin_port = htons(net_hostport);
 
 				get_socket_addr (control_socket, &addr);
-				Q_strcpy(my_tcpip_address,  addr_to_string(&addr));
-				colon = Q_strrchr (my_tcpip_address, ':');
+				strcpy(my_tcpip_address,  addr_to_string(&addr));
+				colon = strrchr (my_tcpip_address, ':');
 				if (colon)
 					*colon = 0;
 
@@ -369,7 +383,7 @@ namespace quake
 				int haddr;
 
 				haddr = ntohl(((struct sockaddr_in *)addr)->sin_addr.s_addr);
-				sprintf(buffer, "%d.%d.%d.%d:%d", (haddr >> 24) & 0xff, (haddr >> 16) & 0xff, (haddr >> 8) & 0xff, haddr & 0xff, ntohs(((struct sockaddr_in *)addr)->sin_port));
+				snprintf(buffer, sizeof(buffer), "%d.%d.%d.%d:%d", (haddr >> 24) & 0xff, (haddr >> 16) & 0xff, (haddr >> 8) & 0xff, haddr & 0xff, ntohs(((struct sockaddr_in *)addr)->sin_port));
 				return buffer;
 			}
 
@@ -396,7 +410,7 @@ namespace quake
 				socklen_t addrlen = sizeof(struct qsockaddr);
 				unsigned int a;
 
-				Q_memset(addr, 0, sizeof(struct qsockaddr));
+				memset(addr, 0, sizeof(struct qsockaddr));
 				getsockname(socket, (struct sockaddr *)addr, &addrlen);
 				a = ((struct sockaddr_in *)addr)->sin_addr.s_addr;
 				if (a == 0 || a == inet_addr("127.0.0.1"))
@@ -414,11 +428,11 @@ namespace quake
 				hostentry = gethostbyaddr ((char *)&((struct sockaddr_in *)addr)->sin_addr, sizeof(struct in_addr), AF_INET);
 				if (hostentry)
 				{
-					Q_strncpy (name, (char *)hostentry->h_name, NET_NAMELEN - 1);
+					strncpy (name, (char *)hostentry->h_name, NET_NAMELEN - 1);
 					return 0;
 				}
 
-				Q_strcpy (name, addr_to_string (addr));
+				strcpy (name, addr_to_string (addr));
 				return 0;
 			}
 
@@ -430,13 +444,13 @@ namespace quake
 
 				if (name[0] >= '0' && name[0] <= '9')
 					return PartialIPAddress (name, addr);
-				
+
 				hostentry = gethostbyname (name);
 				if (!hostentry)
 					return -1;
 
 				addr->sa_family = AF_INET;
-				((struct sockaddr_in *)addr)->sin_port = htons(net_hostport);	
+				((struct sockaddr_in *)addr)->sin_port = htons(net_hostport);
 				((struct sockaddr_in *)addr)->sin_addr.s_addr = *(int *)hostentry->h_addr_list[0];
 
 				return 0;
@@ -489,7 +503,7 @@ namespace quake
 				int mask;
 				int run;
 				int port;
-				
+
 				buff[0] = '.';
 				b = buff;
 				strcpy(buff+1, in);
@@ -516,16 +530,16 @@ namespace quake
 					mask<<=8;
 					addr = (addr<<8) + num;
 				}
-				
+
 				if (*b++ == ':')
-					port = Q_atoi(b);
+					port = atoi(b);
 				else
 					port = net_hostport;
 
 				hostaddr->sa_family = AF_INET;
-				((struct sockaddr_in *)hostaddr)->sin_port = htons((short)port);	
+				((struct sockaddr_in *)hostaddr)->sin_port = htons((short)port);
 				((struct sockaddr_in *)hostaddr)->sin_addr.s_addr = (my_addr & htonl(mask)) | htonl(addr);
-				
+
 				return 0;
 			}
 			//=============================================================================
@@ -639,10 +653,10 @@ namespace quake
 				}
 
 				gethostname(buff, MAXHOSTNAMELEN);
-				if (Q_strcmp(hostname.string, "UNNAMED") == 0)
+				if (strcmp(hostname.string, "UNNAMED") == 0)
 				{
 					buff[15] = 0;
-					Cvar_Set ("hostname", buff);
+					Cvar_SetStringByRef (&hostname, buff);
 				}
 
 				if ((control_socket = open_socket(0)) == -1) {
@@ -657,8 +671,8 @@ namespace quake
 				((sockaddr_adhoc *)&broadcast_addr)->port = net_hostport;
 
 				get_socket_addr (control_socket, &addr);
-				Q_strcpy(my_tcpip_address,  addr_to_string(&addr));
-				colon = Q_strrchr(my_tcpip_address, ':');
+				strcpy(my_tcpip_address,  addr_to_string(&addr));
+				colon = strrchr(my_tcpip_address, ':');
 				if (colon) *colon = 0;
 
 				listen(qtrue);
@@ -910,7 +924,7 @@ namespace quake
 
 				strcpy(temp.product, product);
 				temp.unknown = 0;
-	
+
 				retVal = sceNetAdhocctlInit(0x2000, 0x20, &temp);
 				if (retVal != 0) return retVal;
 

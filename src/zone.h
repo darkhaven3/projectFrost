@@ -85,6 +85,11 @@ Zone block
 
 void Memory_Init (void *buf, int size);
 
+void *Q_malloc (size_t size);			// joe
+void *Q_calloc (size_t n, size_t size);		//
+void *Q_realloc (void *ptr, size_t size);	//
+void *Q_strdup (const char *str);		//
+
 void Z_Free (void *ptr);
 void *Z_Malloc (int size);			// returns 0 filled memory
 void *Z_TagMalloc (int size, int tag);
@@ -113,7 +118,7 @@ typedef struct cache_user_s
 	void	*data;
 } cache_user_t;
 
-void Cache_Flush (void);
+void Cache_Flush_f (void);
 
 void *Cache_Check (cache_user_t *c);
 // returns the cached data, and moves to the head of the LRU list
@@ -127,5 +132,5 @@ void *Cache_Alloc (cache_user_t *c, int size, char *name);
 
 void Cache_Report (void);
 
-
-
+void Hunk_Print_f (void);
+void Hunk_Print (qboolean all);
