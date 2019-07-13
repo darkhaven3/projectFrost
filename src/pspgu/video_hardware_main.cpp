@@ -89,6 +89,16 @@ int		d_lightstylevalue[256];	// 8.8 fraction of base light value
 
 void R_MarkLeaves (void);
 
+//
+// constants
+//
+
+const float Pi180 = (GU_PI / 180.0f);   //used in entity rotations
+
+//
+// cvars
+//
+
 cvar_t  r_skyclip = {"r_skyclip", "2560", qtrue}; 				// Adjust skybox clipping distance
 cvar_t  r_norefresh = {"r_norefresh","0"};      				// Unknown
 cvar_t  r_drawentities = {"r_drawentities","1"}; 				// Toggle entity drawing
@@ -201,9 +211,9 @@ void R_RotateForEntity (entity_t *ent)
 */
 	// Rotate.
 	const ScePspFVector3 rotation = {
-		ent->angles[ROLL] * (GU_PI / 180.0f),
-		-ent->angles[PITCH] * (GU_PI / 180.0f),
-		ent->angles[YAW] * (GU_PI / 180.0f)
+		ent->angles[ROLL] * Pi180,
+		-ent->angles[PITCH] * Pi180,
+		ent->angles[YAW] * Pi180
 	};
 	sceGumRotateZYX(&rotation);
 
@@ -303,9 +313,9 @@ void R_BlendedRotateForEntity (entity_t *ent)
 
     // Rotate.
     const ScePspFVector3 rotation = {
-    (ent->lastangles[ROLL] + ( blend * d[ROLL])) * (GU_PI / 180.0f),
-    (-ent->lastangles[PITCH] + (-blend * d[PITCH])) * (GU_PI / 180.0f),
-    (ent->lastangles[YAW] + ( blend * d[YAW])) * (GU_PI / 180.0f)
+    (ent->lastangles[ROLL] + ( blend * d[ROLL])) * Pi180,
+    (-ent->lastangles[PITCH] + (-blend * d[PITCH])) * Pi180,
+    (ent->lastangles[YAW] + ( blend * d[YAW])) * Pi180
     };
     sceGumRotateZYX(&rotation);
 
@@ -1883,19 +1893,19 @@ void R_SetupGL (void)
 	sceGumLoadIdentity();
 
     /*glRotatef (-90,  1, 0, 0);	    // put Z going up*/
-	sceGumRotateX(-90 * (GU_PI / 180.0f));
+	sceGumRotateX(-90 * Pi180);
 
     /*glRotatef (90,  0, 0, 1);	    // put Z going up*/
-	sceGumRotateZ(90 * (GU_PI / 180.0f));
+	sceGumRotateZ(90 * Pi180);
 
     /*glRotatef (-r_refdef.viewangles[2],  1, 0, 0);*/
-	sceGumRotateX(-r_refdef.viewangles[2] * (GU_PI / 180.0f));
+	sceGumRotateX(-r_refdef.viewangles[2] * Pi180);
 
     /*glRotatef (-r_refdef.viewangles[0],  0, 1, 0);*/
-	sceGumRotateY(-r_refdef.viewangles[0] * (GU_PI / 180.0f));
+	sceGumRotateY(-r_refdef.viewangles[0] * Pi180);
 
     /*glRotatef (-r_refdef.viewangles[1],  0, 0, 1);*/
-	sceGumRotateZ(-r_refdef.viewangles[1] * (GU_PI / 180.0f));
+	sceGumRotateZ(-r_refdef.viewangles[1] * Pi180);
 
     /*glTranslatef (-r_refdef.vieworg[0],  -r_refdef.vieworg[1],  -r_refdef.vieworg[2]);*/
 	const ScePspFVector3 translation = {

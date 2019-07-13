@@ -137,7 +137,7 @@ void GL_Bind (int texture_index)
 			void* const texture_memory2 = ((byte*) texture_memory)+offset;
 			sceGuTexImage(i, texture.width/div, texture.height/div, texture.width/div, texture_memory2);
 			offset += size/(div*div);
-			div *=2;
+			div << 1;
 		}
 	}
 }
