@@ -1,6 +1,7 @@
 /*
 Copyright (C) 1996-1997 Id Software, Inc.
 Copyright (C) 2007 Peter Mackay and Chris Swindle.
+Copyright (C) 2019 Elric Sullivan -- modifications only.
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -23,42 +24,108 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 // models are the only shared resource between a client and server running
 // on the same machine.
 
+
+//
+//includes - C
+//
+
 extern "C"
 {
 #include "../quakedef.h"
 }
+
+//
+// includes - cpp
+//
+
 #include <malloc.h>
 #include <pspgu.h>
 
 #include "lightmaps.h"
 #include <list>
 
+//
+// defines
+//
+
+#define	MAX_MOD_KNOWN	512   // /!\ initializes a static array
+#define	ANIM_CYCLE	  2     // /!\ used for texture animations
+
+//used for Mod_FloodFillSkin
+#define FLOODFILL_FIFO_SIZE 0x1000
+#define FLOODFILL_FIFO_MASK (FLOODFILL_FIFO_SIZE - 1)
+
+#define FLOODFILL_STEP( off, dx, dy ) \
+{ \
+	if (pos[off] == fillcolor) \
+	{ \
+		pos[off] = 255; \
+		fifo[inpt].x = x + (dx), fifo[inpt].y = y + (dy); \
+		inpt = (inpt + 1) & FLOODFILL_FIFO_MASK; \
+	} \
+	else if (pos[off] != 255) fdc = pos[off]; \
+}
+//
+
+//
+// typedefs
+//
+
+typedef struct {
+	short		x, y;
+} floodfill_t;
+
+//
+// globals
+//
+
 int LIGHTMAP_BYTES;
 int MAX_LIGHTMAPS;
+
+/////namespace begin/////
 
 using namespace std;
 
 list<int> mapTextureNameList;
 
-model_t	*loadmodel;
-char	loadname[32];	// for hunk tags
-
-void Mod_LoadAliasModel (model_t *mod, void *buffer);
-void Mod_LoadSpriteModel (model_t *mod, void *buffer);
-void Mod_LoadBrushModel (model_t *mod, void *buffer);
-
-model_t *Mod_LoadModel (model_t *mod, qboolean crash);
-
+//visibility?
 byte	mod_novis[MAX_MAP_LEAFS/8];
-
-#define	MAX_MOD_KNOWN	512
 model_t	mod_known[MAX_MOD_KNOWN];
 int		mod_numknown;
 
+//model loading
+model_t	*loadmodel;
+char	loadname[32];	// for hunk tags
+
+//alias model stuff
+aliashdr_t	*pheader;
+
+stvert_t	stverts[MAXALIASVERTS];
+mtriangle_t	triangles[MAXALIASTRIS];
+
+// a pose is a single set of vertexes. a frame may be an animating sequence of poses
+trivertx_t	*poseverts[MAXALIASFRAMES];
+int			posenum;
+
+byte		**player_8bit_texels_tbl;
+byte		*player_8bit_texels;
+
+byte	aliasbboxmins[3], aliasbboxmaxs[3];
+
+//cvars
 cvar_t gl_subdivide_size = {"gl_subdivide_size", "256", qtrue};
+
+//
+// externs
+//
 
 extern int solidskytexture;
 extern int alphaskytexture;
+
+//
+// sky stuff (?)
+//
+
 /*
 extern int sky_rt;
 extern int sky_bk;
@@ -67,6 +134,17 @@ extern int sky_ft;
 extern int sky_up;
 extern int sky_dn;
 */
+
+//
+// local prototypes
+//
+
+void Mod_LoadAliasModel (model_t *mod, void *buffer);
+void Mod_LoadSpriteModel (model_t *mod, void *buffer);
+void Mod_LoadBrushModel (model_t *mod, void *buffer);
+
+model_t *Mod_LoadModel (model_t *mod, qboolean crash);
+
 /*
 ===============
 Mod_Init
@@ -83,14 +161,16 @@ void Mod_Init (void)
 Mod_Extradata
 
 Caches the data if needed
+
+===============
+xaa: slight syntax change
 ===============
 */
 void *Mod_Extradata (model_t *mod)
 {
-	void	*r;
+	void	*r = Cache_Check (&mod->cache);
 
-	if ((r = Cache_Check (&mod->cache)))
-		return r;
+	if (r) return r;
 
 	Mod_LoadModel (mod, qtrue);
 
@@ -302,11 +382,15 @@ model_t *Mod_LoadModel (model_t *mod, qboolean crash)
 	}
 	}
 
+//xaa: ???
+
+/*
 // because the world is so huge, load it one piece at a time
 	if (!crash)
 	{
 
 	}
+*/
 
 // load the file
 	if (!(buf = (unsigned *)COM_LoadStackFile (mod->name, stackbuf, sizeof(stackbuf))))
@@ -382,24 +466,28 @@ byte	*mod_base;
 =================
 Mod_LoadTextures
 =================
+xaa: readability changes
+=================
 */
 void Mod_LoadTextures (lump_t *l)
 {
 	int		i, j, pixels, num, max, altmax;
+
 	miptex_t	*mt;
 	texture_t	*tx, *tx2, *anims[10], *altanims[10];
 	dmiptexlump_t *m;
-	if (!l->filelen)
-	{
+
+	//empty textures lump
+	if (!l->filelen) {
 		loadmodel->textures = NULL;
 		return;
 	}
-	m = (dmiptexlump_t *)(mod_base + l->fileofs);
 
+	m            = (dmiptexlump_t *)(mod_base + l->fileofs);
 	m->nummiptex = LittleLong (m->nummiptex);
 
 	loadmodel->numtextures = m->nummiptex;
-	loadmodel->textures = static_cast<texture_t**>(Hunk_AllocName (m->nummiptex * sizeof(*loadmodel->textures) , loadname));
+	loadmodel->textures    = static_cast<texture_t**>(Hunk_AllocName (m->nummiptex * sizeof(*loadmodel->textures) , loadname));
 
 	for (i=0 ; i<m->nummiptex ; i++)
 	{
@@ -412,6 +500,8 @@ void Mod_LoadTextures (lump_t *l)
 		for (j=0 ; j<MIPLEVELS ; j++)
 			mt->offsets[j] = LittleLong (mt->offsets[j]);
 
+    //xaa: will remove this since we will not be using vanilla content
+    /*
 		// HACK HACK HACK
 		if (!strcmp(mt->name, "shot1sid") && mt->width == 32 && mt->height == 32  && CRC_Block((byte *)(mt + 1), mt->width * mt->height) == 65393)
 		{	// This texture in b_shell1.bsp has some of the first 32 pixels painted white.
@@ -419,7 +509,9 @@ void Mod_LoadTextures (lump_t *l)
 			// 32 pixels from the bottom to make it look nice.
 			memcpy (mt + 1, (byte *)(mt + 1) + 32*31, 32);
 		}
+		*/
 
+    // /!\ R_SKIP_SANITY_CHECK
 		if ( (mt->width & 15) || (mt->height & 15) )
 			Host_Error ("Mod_LoadTextures: Texture %s is not 16 aligned", mt->name);
 
@@ -428,9 +520,7 @@ void Mod_LoadTextures (lump_t *l)
 
 		const std::size_t buffer_size = pixels;
 		byte* tx_pixels = static_cast<byte*>(memalign(16, buffer_size));
-		if (!tx_pixels) {
-			Sys_Error("Out of RAM for loading textures");
-		}
+		if (!tx_pixels) Sys_Error("Out of RAM for loading textures");
 
 		loadmodel->textures[i] = tx;
 
@@ -455,6 +545,9 @@ void Mod_LoadTextures (lump_t *l)
 		if (r_mipmaps.value > 0)
 			level = 3;
 
+    // /!\ HLBSP
+    
+    /*
 		if (loadmodel->bspversion == HL_BSPVERSION) 
 		{
 			byte      *data;
@@ -481,6 +574,8 @@ void Mod_LoadTextures (lump_t *l)
 				}
 			}
 		}
+		*/
+
 		if (COM_CheckParm("-nearest"))
 		{
 			//texture_mode = GL_LINEAR_MIPMAP_NEAREST; //_LINEAR;
@@ -498,7 +593,7 @@ void Mod_LoadTextures (lump_t *l)
 
 // sequence the animations
 
-	for (i=0 ; i<m->nummiptex ; i++)
+	for (i=0 ; i < m->nummiptex ; i++)
 	{
 		tx = loadmodel->textures[i];
 		if (!tx || tx->name[0] != '+')
@@ -564,8 +659,6 @@ void Mod_LoadTextures (lump_t *l)
 				Host_Error ("Mod_LoadTextures: Bad animating texture %s", tx->name);
 			}
 		}
-
-#define	ANIM_CYCLE	2
 	// link them all together
 		for (j=0 ; j<max ; j++)
 		{
@@ -612,6 +705,8 @@ void Mod_LoadLighting (lump_t *l)
 	memcpy (loadmodel->lightdata, mod_base + l->fileofs, l->filelen);
 	*/
 
+  // /!\ HLBSP support
+  /*
 	if (loadmodel->bspversion == HL_BSPVERSION)
 	{
 		LIGHTMAP_BYTES = 4;
@@ -632,6 +727,10 @@ void Mod_LoadLighting (lump_t *l)
         LIGHTMAP_BYTES = 1;
         MAX_LIGHTMAPS = 64;
     }
+  */
+
+  LIGHTMAP_BYTES = 1;
+  MAX_LIGHTMAPS = 64;
 
 	int i;
 	byte *in, *out, *data;
@@ -1009,11 +1108,16 @@ void Mod_LoadFaces (lump_t *l)
 
 		for (i=0 ; i<MAXLIGHTMAPS ; i++)
 			out->styles[i] = in->styles[i];
+
+// /!\ HLBSP support
+/*
 #if 1
 		if (loadmodel->bspversion == HL_BSPVERSION)
 			i = LittleLong(in->lightofs/3);
 		else
 #endif
+*/
+
 		i = LittleLong(in->lightofs);
 		if (i == -1)
 			out->samples = NULL;
@@ -1477,28 +1581,6 @@ void Mod_LoadBrushModel (model_t *mod, void *buffer)
 }
 
 /*
-==============================================================================
-
-ALIAS MODELS
-
-==============================================================================
-*/
-
-aliashdr_t	*pheader;
-
-stvert_t	stverts[MAXALIASVERTS];
-mtriangle_t	triangles[MAXALIASTRIS];
-
-// a pose is a single set of vertexes. a frame may be an animating sequence of poses
-trivertx_t	*poseverts[MAXALIASFRAMES];
-int			posenum;
-
-byte		**player_8bit_texels_tbl;
-byte		*player_8bit_texels;
-
-byte	aliasbboxmins[3], aliasbboxmaxs[3];
-
-/*
 =================
 Mod_LoadAliasFrame
 =================
@@ -1585,36 +1667,6 @@ void *Mod_LoadAliasGroup (void * pin,  maliasframedesc_t *frame)
 }
 
 //=========================================================
-
-/*
-=================
-Mod_FloodFillSkin
-
-Fill background pixels so mipmapping doesn't have haloes - Ed
-=================
-*/
-
-typedef struct
-{
-	short		x, y;
-} floodfill_t;
-/*
-extern unsigned d_8to24table[];
-*/
-// must be a power of 2
-#define FLOODFILL_FIFO_SIZE 0x1000
-#define FLOODFILL_FIFO_MASK (FLOODFILL_FIFO_SIZE - 1)
-
-#define FLOODFILL_STEP( off, dx, dy ) \
-{ \
-	if (pos[off] == fillcolor) \
-	{ \
-		pos[off] = 255; \
-		fifo[inpt].x = x + (dx), fifo[inpt].y = y + (dy); \
-		inpt = (inpt + 1) & FLOODFILL_FIFO_MASK; \
-	} \
-	else if (pos[off] != 255) fdc = pos[off]; \
-}
 
 /*
 =================
@@ -1876,10 +1928,14 @@ void Mod_LoadAliasModel (model_t *mod, void *buffer)
 
 // FIXME: do this right
 
+// xaa: wat
+
+/*
 #if 0 // PSP was doing this
 	mod->mins[0] = mod->mins[1] = mod->mins[2] = -64;
 	mod->maxs[0] = mod->maxs[1] = mod->maxs[2] = 64;
 #endif
+*/
 
 #if 1
 	for (i=0 ; i<3 ; i++)
