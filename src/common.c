@@ -1304,7 +1304,7 @@ int COM_FindFile (char *filename, int *handle, int *file)
 	search = com_searchpaths;
 	if (proghack)
 	{	// gross hack to use quake 1 progs with quake 2 maps
-		if (!strcmp(filename, "progs.dat"))
+		if (!strcmp(filename, FURY_GAMECODE_FILE))
 			search = search->next;
 	}
 

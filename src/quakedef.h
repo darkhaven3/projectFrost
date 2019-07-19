@@ -21,6 +21,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 //#define	GLTEST					// experimental stuff
 
+//xaa: modified for Fury engine.
+#define FURY_GAMECODE_FILE  "game.fox"  //this is where progs is now
+
 #define	QUAKE_GAME					// as opposed to utilities
 
 #define ENGINE_NAME "Insomnia ProQuake"

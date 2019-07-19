@@ -27,7 +27,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 server_t		sv;
 server_static_t	svs;
 
-cvar_t  sv_progs = {"sv_progs", "progs.dat" };
+cvar_t  sv_progs = {"sv_progs", FURY_GAMECODE_FILE };
 
 cvar_t	sv_defaultmap = {"sv_defaultmap",""}; //Baker 3.95: R00k
 cvar_t	sv_ipmasking = {"sv_ipmasking","1",false, true}; //Baker 3.95: R00k
